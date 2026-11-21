@@ -66,18 +66,24 @@ const Gizmo = (function () {
 	function localToScreen(part, lx, ly) {
 	  const el = partLocalEl(part);
 	  if (!el) return { x: 0, y: 0 };
-	  const p = new DOMPoint(lx, ly).matrixTransform(el.getScreenCTM());
+	  const ctm = el.getScreenCTM();
+	  if (!ctm) return { x: 0, y: 0 };
+	  const p = new DOMPoint(lx, ly).matrixTransform(ctm);
 	  return { x: p.x, y: p.y };
 	}
 	function screenToLocal(part, sx, sy) {
 	  const el = partLocalEl(part);
 	  if (!el) return null;
-	  const p = new DOMPoint(sx, sy).matrixTransform(el.getScreenCTM().inverse());
+	  const ctm = el.getScreenCTM();
+	  if (!ctm) return null;
+	  const p = new DOMPoint(sx, sy).matrixTransform(ctm.inverse());
 	  return { x: p.x, y: p.y };
 	}
 	function screenToParent(part, sx, sy) {
-	  const g = getG(part); if (!g) return null;
-	  const p = new DOMPoint(sx, sy).matrixTransform(g.parentNode.getScreenCTM().inverse());
+	  const g = getG(part); if (!g || !g.parentNode) return null;
+	  const ctm = g.parentNode.getScreenCTM();
+	  if (!ctm) return null;
+	  const p = new DOMPoint(sx, sy).matrixTransform(ctm.inverse());
 	  return { x: p.x, y: p.y };
 	}
 	let onModeChange = null;
@@ -493,7 +499,13 @@ function onMouseMove(e) {
 
   render();
   if (app && app.syncProperties) app.syncProperties();
-  if (app && app.onPartChanged) app.onPartChanged(d.part);
+  if (app && app.onPartChanged) {
+    if (d.items && d.moved) {
+      for (const it of d.items) app.onPartChanged(it.part, d.kind, true);
+    } else if (d.kind !== 'move' || d.moved) {
+      app.onPartChanged(d.part, d.kind, true);
+    }
+  }
 }
 
   function onMouseUp() {
@@ -508,9 +520,9 @@ function onMouseMove(e) {
 	}
 
     if (d.items && app && app.onPartChanged) {
-      for (const it of d.items) app.onPartChanged(it.part);
+      for (const it of d.items) app.onPartChanged(it.part, d.kind, false);
     } else if (d.part && app && app.onPartChanged) {
-      app.onPartChanged(d.part);
+      app.onPartChanged(d.part, d.kind, false);
     }
     state.drag = null;
     render();

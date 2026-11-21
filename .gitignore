@@ -1,2 +1,18 @@
-# some stuff??
-need_to_FIX_app_js
+# Временные файлы запуска сервера (создаются start.bat / server.js)
+port.txt
+server.log
+*.log
+
+# Зависимости Node.js (если появятся инструменты разработки)
+node_modules/
+
+# Системные файлы ОС
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Локальные настройки IDE и редакторов
+.vscode/
+.idea/
+*.swp
+*~

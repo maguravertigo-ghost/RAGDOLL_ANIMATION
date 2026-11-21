@@ -1,0 +1,60 @@
+{
+  "objects": {
+    "carrot": [
+      "body.svg",
+      "shadow.svg",
+      "tail_0.svg",
+      "tail_1.svg",
+      "tail_2.svg"
+    ],
+    "clock": [
+      "arrow_long.svg",
+      "arrow_sm.svg",
+      "bell_L.svg",
+      "bell_R.svg",
+      "body.svg",
+      "clock_center.svg",
+      "shadow.svg"
+    ],
+    "fairy": [
+      "arm_L_angled.svg",
+      "arm_L.svg",
+      "arm_R_angled.svg",
+      "arm_R.svg",
+      "body.svg",
+      "dress.svg",
+      "eyes.svg",
+      "h_long_L.svg",
+      "h_long_R.svg",
+      "hair_ch.svg",
+      "hat_tail.svg",
+      "head_n_hat.svg",
+      "shadow.svg",
+      "sleeve_L.svg",
+      "sleeve_R.svg"
+    ],
+    "flower": [
+      "head.svg",
+      "leaf.svg",
+      "leg.svg",
+      "shadow.svg"
+    ],
+    "plate": [
+      "body.svg"
+    ],
+    "rat_n_cage": [
+      "cage_back.svg",
+      "cage_face.svg",
+      "rat_body.svg",
+      "rat_eyes.svg",
+      "rat_face.svg",
+      "rat_fingers_L.svg",
+      "rat_fingers_R.svg",
+      "tail_back.svg",
+      "tail_face.svg"
+    ],
+    "roll_page": [
+      "page_body.svg"
+    ]
+  }
+}
