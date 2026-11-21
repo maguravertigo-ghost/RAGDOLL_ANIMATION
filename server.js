@@ -16,7 +16,7 @@ const url  = require('url');
 
 const PORT_MIN = 8000;
 const PORT_MAX = 8200;
-const HOST     = '127.0.0.1';
+const HOST     = process.env.HOST || '0.0.0.0';
 
 const ROOT      = __dirname;
 const ANIM_DIR  = path.join(ROOT, 'anim');
