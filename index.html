@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Animation Editor</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
   <header>
@@ -61,6 +61,9 @@
 	  </button>
 	  <button class="icon-btn" id="btn-reset-anim" title="Создать reset animation">
 		<span class="material-icons">restart_alt</span>
+	  </button>
+	  <button class="icon-btn" id="btn-presets" title="Пресеты поз (сохранить / выбрать позу)">
+		<span class="material-icons">accessibility_new</span>
 	  </button>
 		
 	  <span class="sep"></span>
@@ -342,6 +345,79 @@
     </div>
   </div>
 
+  <div class="modal" id="modal-presets" hidden>
+    <div class="modal-box modal-box-presets">
+      <div class="modal-title modal-title-flex">
+        <span>Пресеты поз</span>
+        <button class="icon-btn icon-btn-sm" id="presets-close" title="Закрыть">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body presets-body">
+        <div class="preset-save-box">
+          <div class="st-heading">Сохранить текущую позу кадра</div>
+          <div class="preset-save-row">
+            <input type="text" id="preset-name-input" class="text-input" placeholder="Название пресета (например: Руки вверх)" autocomplete="off" spellcheck="false">
+            <button type="button" class="primary" id="preset-save-btn">Сохранить</button>
+          </div>
+          <div class="preset-scope-row">
+            <label class="pcheck">
+              <input type="radio" name="preset-scope" id="preset-scope-all" value="all" checked>
+              <span>Все слои объекта</span>
+            </label>
+            <label class="pcheck">
+              <input type="radio" name="preset-scope" id="preset-scope-sel" value="selected">
+              <span id="preset-scope-sel-label">Только выделенные слои (0)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="st-heading">Сохранённые пресеты (двойной клик — применить)</div>
+        <ul id="presets-list" class="presets-list"></ul>
+
+        <div class="preset-opts-box">
+          <div class="st-heading">Параметры переноса на текущего / другого персонажа</div>
+          <label class="pcheck">
+            <input type="checkbox" id="preset-opt-relative" checked>
+            <span>Относительно базовой <code>reset</code>-позы (универсально для разных персонажей)</span>
+          </label>
+          <label class="pcheck">
+            <input type="checkbox" id="preset-opt-pos" checked>
+            <span>Применять смещение позиции (выключите, если рост/пропорции другого персонажа отличаются)</span>
+          </label>
+          <label class="pcheck">
+            <input type="checkbox" id="preset-opt-vis" checked>
+            <span>Применять видимость слоёв</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions modal-actions-split">
+        <div class="modal-actions-left">
+          <button class="icon-btn icon-btn-sm" id="preset-update-btn" title="Перезаписать выбранный пресет текущей позой">
+            <span class="material-icons">sync</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="preset-rename-btn" title="Переименовать пресет">
+            <span class="material-icons">edit</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="preset-delete-btn" title="Удалить пресет">
+            <span class="material-icons">delete</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="preset-export-btn" title="Экспортировать пресеты в JSON">
+            <span class="material-icons">file_download</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="preset-import-btn" title="Импортировать пресеты из JSON">
+            <span class="material-icons">file_upload</span>
+          </button>
+          <input type="file" id="preset-import-input" accept=".json,application/json" hidden>
+        </div>
+        <div class="preset-footer-right">
+          <button id="presets-cancel">Закрыть</button>
+          <button id="preset-apply-btn" class="primary">Применить к кадру</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="modal-confirm" hidden>
     <div class="modal-box modal-box-sm">
       <div class="modal-title" id="confirm-title">Подтверждение</div>
@@ -354,13 +430,14 @@
   </div>
   <div class="hint" id="hint"></div>
 
-  <script src="js/gizmo.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/scene.js"></script>
-  <script src="js/layers.js"></script>
-  <script src="js/animation.js"></script>
-  <script src="js/timeline.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/gizmo.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
+  <script src="js/api.js?v=2"></script>
+  <script src="js/scene.js?v=2"></script>
+  <script src="js/layers.js?v=2"></script>
+  <script src="js/animation.js?v=2"></script>
+  <script src="js/timeline.js?v=2"></script>
+  <script src="js/presets.js?v=2"></script>
+  <script src="js/main.js?v=2"></script>
 </body>
 </html>

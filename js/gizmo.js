@@ -130,6 +130,7 @@ const Gizmo = (function () {
     if (!svgEl) return;
     clear();
     const part = getPart(); if (!part) return;
+    if (app && typeof app.isPartVisible === 'function' && !app.isPartVisible(part)) return;
     const g = getG(part);   if (!g) return;
     const { w, h } = getSize(part);
 
@@ -208,6 +209,7 @@ const Gizmo = (function () {
   function onMouseDown(e) {
     if (e.button !== 0) return;
     const part = getPart(); if (!part) return;
+    if (app && typeof app.isPartVisible === 'function' && !app.isPartVisible(part)) return;
 
     const tgt = e.target;
     const hit = tgt.closest && tgt.closest('[data-gizmo]');

@@ -227,6 +227,36 @@ function apiObjectSave(req, res, name) {
   });
 }
 
+const PRESETS_FILE = path.join(ROOT, 'presets.json');
+
+function apiPresetsGet(req, res) {
+  try {
+    if (!fs.existsSync(PRESETS_FILE)) {
+      return sendJson(res, 200, { version: 1, presets: [] });
+    }
+    const raw = fs.readFileSync(PRESETS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    sendJson(res, 200, parsed);
+  } catch (e) {
+    sendJson(res, 500, { error: e.message });
+  }
+}
+
+function apiPresetsSave(req, res) {
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON: ' + e.message }); }
+    try {
+      fs.writeFileSync(PRESETS_FILE, JSON.stringify(data, null, 2), 'utf8');
+      sendJson(res, 200, { ok: true, path: 'presets.json' });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
 // ------------------------------------------------------------
 // роутер
 // ------------------------------------------------------------
@@ -239,6 +269,14 @@ function handle(req, res) {
   // --- API ---
   if (pathname === '/api/objects' && method === 'GET') {
     return apiObjects(req, res);
+  }
+
+  if (pathname === '/api/presets' && method === 'GET') {
+    return apiPresetsGet(req, res);
+  }
+
+  if (pathname === '/api/presets' && method === 'POST') {
+    return apiPresetsSave(req, res);
   }
 
   let m = pathname.match(/^\/api\/object\/([^\/]+)$/);

@@ -125,10 +125,11 @@ function renderTimeline() {
           '<span class="material-icons">' + (expanded ? 'expand_more' : 'chevron_right') + '</span>' +
         '</button>' +
         '<span class="tl-row-label"></span>' +
-        '<button class="tl-row-vis' + (visOff ? ' hidden-off' : '') + '" type="button" tabindex="-1" title="Видимость">' +
+        '<button class="tl-row-vis' + (visOff ? ' hidden-off' : '') + '" type="button" tabindex="-1" title="Видимость слоя">' +
           '<span class="material-icons">' + (visOff ? 'visibility_off' : 'visibility') + '</span>' +
         '</button>';
       nameDiv.querySelector('.tl-row-label').textContent = part.id;
+      nameDiv.querySelector('.tl-row-vis').dataset.partId = part.id;
     } else {
       nameDiv.style.paddingLeft = (26 + Math.min(depth, 5) * 8) + 'px';
       nameDiv.textContent = property;
@@ -217,9 +218,9 @@ function renderTimeline() {
               sk => !(sk.partId === part.id && sk.property === property && Math.abs(sk.time - k.time) < 1e-6)
             );
             applyAnimationAtTime(App.anim.time);
-            renderScene();
+            syncSceneTransforms();
             renderOnionSkins();
-            renderLayers();
+            syncVisibilityUI();
             renderTimeline();
             Gizmo.render();
             syncPropertyInputs();
@@ -315,7 +316,7 @@ function addFrameAtFocus(preferredType) {
     }
     if (converted > 0) {
       applyAnimationAtTime(App.anim.time);
-      renderScene();
+      syncSceneTransforms();
       renderOnionSkins();
       renderTimeline();
       setHint('Ключевыми стали кадры: ' + converted, 1400);
@@ -384,9 +385,9 @@ function deleteSelectedKeyframes() {
   }
   App.anim.selectedKeys = [];
   applyAnimationAtTime(App.anim.time);
-  renderScene();
+  syncSceneTransforms();
   renderOnionSkins();
-  renderLayers();
+  syncVisibilityUI();
   renderTimeline();
   Gizmo.render();
   syncPropertyInputs();
@@ -502,7 +503,7 @@ function finishKeyDrag() {
       tr.keys = dedup;
     }
     applyAnimationAtTime(App.anim.time);
-    renderScene();
+    syncSceneTransforms();
     renderOnionSkins();
     renderTimeline();
     Gizmo.render();

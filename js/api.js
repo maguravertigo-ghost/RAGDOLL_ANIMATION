@@ -113,10 +113,103 @@ function buildDefaultSettingsClient(name, svgs) {
   };
 }
 
+let _svgDefUid = 0;
+
+function sanitizeSvgRoot(root) {
+  // 1) Удаляем служебные узлы Inkscape/Sodipodi (namedview, metadata, path-effect)
+  const metaToRemove = [];
+  const walkAll = root.getElementsByTagName('*');
+  for (let i = 0; i < walkAll.length; i++) {
+    const el = walkAll[i];
+    const ln = (el.localName || el.tagName || '').toLowerCase();
+    if (ln === 'namedview' || ln === 'metadata' || ln === 'path-effect' || ln === 'guide') {
+      metaToRemove.push(el);
+    }
+  }
+  for (const el of metaToRemove) {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  // 2) Удаляем скрытые слои из общего файла Inkscape (display:none вне <defs>)
+  function pruneHidden(parent, insideDefs) {
+    let child = parent.firstElementChild;
+    while (child) {
+      const next = child.nextElementSibling;
+      const ln = (child.localName || child.tagName || '').toLowerCase();
+      const nowDefs = insideDefs || ln === 'defs';
+      if (!nowDefs) {
+        const dispAttr = child.getAttribute('display');
+        const styleAttr = child.getAttribute('style') || '';
+        if (
+          dispAttr === 'none' ||
+          /(?:^|;)\s*display\s*:\s*none\s*(?:;|$)/i.test(styleAttr)
+        ) {
+          parent.removeChild(child);
+          child = next;
+          continue;
+        }
+      }
+      pruneHidden(child, nowDefs);
+      child = next;
+    }
+  }
+  pruneHidden(root, false);
+}
+
+function uniquifySvgDefs(svgNode) {
+  const defsList = svgNode.getElementsByTagName('defs');
+  if (!defsList.length) return svgNode;
+
+  const idMap = {};
+  let count = 0;
+  const pfx = 'sd' + (++_svgDefUid) + '_';
+
+  for (let d = 0; d < defsList.length; d++) {
+    const elsWithId = defsList[d].querySelectorAll('[id]');
+    for (let i = 0; i < elsWithId.length; i++) {
+      const oldId = elsWithId[i].getAttribute('id');
+      if (oldId) {
+        const newId = pfx + oldId;
+        idMap[oldId] = newId;
+        elsWithId[i].setAttribute('id', newId);
+        count++;
+      }
+    }
+  }
+  if (!count) return svgNode;
+
+  // Переписываем ссылки #oldId и url(#oldId) внутри этого SVG
+  const all = svgNode.getElementsByTagName('*');
+  const refAttrs = ['href', 'xlink:href', 'fill', 'stroke', 'filter', 'clip-path', 'mask', 'style'];
+  for (let i = 0; i < all.length; i++) {
+    const el = all[i];
+    for (const attr of refAttrs) {
+      const val = el.getAttribute(attr);
+      if (!val) continue;
+      if (val.charAt(0) === '#') {
+        const key = val.slice(1);
+        if (idMap[key]) el.setAttribute(attr, '#' + idMap[key]);
+      } else if (val.indexOf('url(#') >= 0) {
+        const replaced = val.replace(/url\(#([^)]+)\)/g, (m, key) =>
+          idMap[key] ? 'url(#' + idMap[key] + ')' : m
+        );
+        if (replaced !== val) el.setAttribute(attr, replaced);
+      }
+    }
+  }
+  return svgNode;
+}
+
+function cloneSvgForDom(cachedSvgEl) {
+  const cloned = document.importNode(cachedSvgEl, true);
+  return uniquifySvgDefs(cloned);
+}
+
 function parseSvgDocument(text, file) {
   const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
   if (doc.querySelector('parsererror')) throw new Error('SVG parse error: ' + file);
   const root = doc.documentElement;
+  sanitizeSvgRoot(root);
   const vb = root.getAttribute('viewBox');
   if (vb) {
     const m = vb.trim().split(/[\s,]+/).map(parseFloat);
@@ -194,6 +287,9 @@ async function activateDirectoryHandle(handle, saveToPrefs) {
 
   updateStorageUI();
   refreshSettingsModalUI();
+  if (typeof loadPresetsFromStorage === 'function') {
+    loadPresetsFromStorage();
+  }
 }
 
 async function pickLocalFolder() {
@@ -369,6 +465,9 @@ async function initStorage() {
   App.storage.mode = App.storage.serverAvailable ? 'server' : 'repo';
   updateStorageUI();
   refreshSettingsModalUI();
+  if (typeof loadPresetsFromStorage === 'function') {
+    loadPresetsFromStorage();
+  }
 }
 
 // -------- обновление индикаторов в шапке и модалках --------
@@ -596,7 +695,7 @@ async function openObject(name) {
     renderScene();
     computeClipOffset();
     applyAnimationAtTime(0);
-    renderScene();
+    syncSceneTransforms();
     renderOnionSkins();
     renderLayers();
     renderProperties();
