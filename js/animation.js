@@ -218,11 +218,15 @@ function onPartEdited(part, kindOrProp, isLiveDrag) {
 
 function setPartVisibility(part, vis) {
   if (!part) return;
-  part.visible = !!vis;
-  updatePartTransform(part);
-  renderLayers();
-  syncPropertyInputs();
+  const nextVis = !!vis;
+  part.visible = nextVis;
+  if (!App.realtime) {
+    part._baseVisible = nextVis;
+  }
   onPartEdited(part, 'visible', false);
+  updatePartTransform(part);
+  syncVisibilityUI();
+  syncPropertyInputs();
   renderTimeline();
 }
 
@@ -320,7 +324,7 @@ function convertAllToKeyframes() {
         for (const k of (t.keys || [])) k.type = 'key';
       }
       applyAnimationAtTime(App.anim.time);
-      renderScene();
+      syncSceneTransforms();
       renderOnionSkins();
       renderTimeline();
       Gizmo.render();
@@ -378,7 +382,7 @@ function selectAnimation(name) {
   App.anim.selectedKeys = [];
   els.animName.value    = a.name;
   applyAnimationAtTime(0);
-  renderScene();
+  syncSceneTransforms();
   renderOnionSkins();
   renderLayers();
   renderTimeline();
@@ -489,8 +493,8 @@ function playbackTick(ts) {
     t = dur;
     App.anim.time = t;
     applyAnimationAtTime(t);
-    renderScene();
-    renderLayers();
+    syncSceneTransforms();
+    syncVisibilityUI();
     updatePlayhead();
     updateTimecode();
     Gizmo.render();
@@ -501,8 +505,9 @@ function playbackTick(ts) {
 
   App.anim.time = t;
   applyAnimationAtTime(t);
-  renderScene();
+  syncSceneTransforms();
   if (App.anim.onion) renderOnionSkins();
+  syncVisibilityUI();
   updatePlayhead();
   updateTimecode();
   Gizmo.render();
@@ -517,9 +522,9 @@ function setTime(t) {
   t = clamp(t, 0, dur);
   App.anim.time = t;
   applyAnimationAtTime(t);
-  renderScene();
+  syncSceneTransforms();
   renderOnionSkins();
-  renderLayers();
+  syncVisibilityUI();
   updatePlayhead();
   updateTimecode();
   Gizmo.render();

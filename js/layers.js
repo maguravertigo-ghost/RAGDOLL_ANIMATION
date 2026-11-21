@@ -81,11 +81,12 @@ function attachLayerEvents(li, p) {
     );
     const rect = li.getBoundingClientRect();
     const y = e.clientY - rect.top, h = rect.height;
-    if (y < h * 0.25) li.classList.add('drop-before');
-    else if (y > h * 0.75) li.classList.add('drop-after');
+    if (y < h * 0.32) li.classList.add('drop-before');
+    else if (y > h * 0.68) li.classList.add('drop-after');
     else li.classList.add('drop-into');
   });
-  li.addEventListener('dragleave', () => {
+  li.addEventListener('dragleave', (e) => {
+    if (e.relatedTarget && li.contains(e.relatedTarget)) return;
     li.classList.remove('drop-before', 'drop-after', 'drop-into');
   });
   li.addEventListener('drop', (e) => {
@@ -100,6 +101,36 @@ function attachLayerEvents(li, p) {
     );
     movePartTo(dragged, p.id, mode);
   });
+}
+
+// Быстрое обновление иконок глаза и прозрачности строк без перестроения DOM
+function syncVisibilityUI() {
+  if (!App.settings) return;
+  const byId = {};
+  for (let i = 0; i < App.settings.parts.length; i++) {
+    const p = App.settings.parts[i];
+    byId[p.id] = p;
+  }
+  if (els.layersList) {
+    const items = els.layersList.querySelectorAll('li[data-id]');
+    for (let i = 0; i < items.length; i++) {
+      const li = items[i];
+      const p = byId[li.dataset.id];
+      if (p) li.style.opacity = (p.visible === false) ? '0.45' : '';
+    }
+  }
+  if (els.tlNamesInner) {
+    const btns = els.tlNamesInner.querySelectorAll('.tl-row-vis[data-part-id]');
+    for (let i = 0; i < btns.length; i++) {
+      const btn = btns[i];
+      const p = byId[btn.dataset.partId];
+      if (!p) continue;
+      const off = (p.visible === false);
+      btn.classList.toggle('hidden-off', off);
+      const ic = btn.querySelector('.material-icons');
+      if (ic) ic.textContent = off ? 'visibility_off' : 'visibility';
+    }
+  }
 }
 
 // -------- выделение слоёв --------
@@ -439,9 +470,9 @@ function renderProperties() {
     else if (key === 'skw.y') t.skew.y     = v;
     else if (key === 'piv.x') part.pivot.x = v;
     else if (key === 'piv.y') part.pivot.y = v;
-    updatePartTransform(part);
     const cat = propCategoryFromKey(key);
     if (cat) onPartEdited(part, cat, !!isLive);
+    updatePartTransform(part);
   }
 
   props.querySelectorAll('input[type="number"]').forEach(inp => {

@@ -35,6 +35,25 @@ const App = {
   _animSelectedName: null,
   _propsCollapsed: false,
   _timelineCollapsed: false,
+  _partDomMap:  {},
+  _onionPool:   [],
+  _onionPoolDirty: true,
+  presets:      [],
+  _selectedPresetId: null,
+  isPartVisible(part) {
+    if (!part) return false;
+    if (part.visible === false) return false;
+    if (!this.settings || !this.settings.parts || !part.parent) return true;
+    const byId = {};
+    for (const p of this.settings.parts) byId[p.id] = p;
+    let cur = byId[part.parent];
+    let guard = 0;
+    while (cur && guard++ < 64) {
+      if (cur.visible === false) return false;
+      cur = cur.parent ? byId[cur.parent] : null;
+    }
+    return true;
+  },
   anim: {
     time: 0,
     playing: false,
@@ -90,6 +109,7 @@ function cacheEls() {
   els.zoomLabel         = $('#zoom-label');
   els.btnRealtime       = $('#btn-realtime');
   els.btnResetAnim      = $('#btn-reset-anim');
+  els.btnPresets        = $('#btn-presets');
   els.btnBg             = $('#btn-bg');
   els.fpsSlider         = $('#fps-slider');
   els.fpsValue          = $('#fps-value');
@@ -198,6 +218,26 @@ function cacheEls() {
   els.confirmText       = $('#confirm-text');
   els.confirmOk         = $('#confirm-ok');
   els.confirmCancel     = $('#confirm-cancel');
+
+  els.modalPresets        = $('#modal-presets');
+  els.presetsClose        = $('#presets-close');
+  els.presetsCancel       = $('#presets-cancel');
+  els.presetNameInput     = $('#preset-name-input');
+  els.presetScopeAll      = $('#preset-scope-all');
+  els.presetScopeSel      = $('#preset-scope-sel');
+  els.presetScopeSelLabel = $('#preset-scope-sel-label');
+  els.presetSaveBtn       = $('#preset-save-btn');
+  els.presetsList         = $('#presets-list');
+  els.presetOptRelative   = $('#preset-opt-relative');
+  els.presetOptPos        = $('#preset-opt-pos');
+  els.presetOptVis        = $('#preset-opt-vis');
+  els.presetApplyBtn      = $('#preset-apply-btn');
+  els.presetUpdateBtn     = $('#preset-update-btn');
+  els.presetRenameBtn     = $('#preset-rename-btn');
+  els.presetDeleteBtn     = $('#preset-delete-btn');
+  els.presetExportBtn     = $('#preset-export-btn');
+  els.presetImportBtn     = $('#preset-import-btn');
+  els.presetImportInput   = $('#preset-import-input');
 
   els.hint              = $('#hint');
 }

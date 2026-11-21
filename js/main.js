@@ -16,7 +16,11 @@ function setupOnionControls() {
     App.anim.onionAfter  = clamp(parseInt(els.onionAfter.value, 10) || 0, 0, 3);
     els.onionBefore.value = String(App.anim.onionBefore);
     els.onionAfter.value  = String(App.anim.onionAfter);
-    if (App.anim.onion) renderOnionSkins();
+    if ((App.anim.onionBefore > 0 || App.anim.onionAfter > 0) && !App.anim.onion) {
+      App.anim.onion = true;
+      updatePlaybackUI();
+    }
+    renderOnionSkins();
   }
 
   els.onionBefore.value = '0';
@@ -37,10 +41,6 @@ function setupOnionControls() {
       if (!inp) return;
       const next = clamp((parseInt(inp.value, 10) || 0) + dir, 0, 3);
       inp.value = String(next);
-      if (next > 0 && !App.anim.onion) {
-        App.anim.onion = true;
-        updatePlaybackUI();
-      }
       syncFromInputs();
     });
   });
@@ -71,6 +71,7 @@ function setupGlobalShortcuts() {
       if (!els.modalAnims.hidden) closeAnimsModal();
       if (!els.modalBg.hidden) closeBgModal();
       if (!els.modalSettings.hidden) closeSettingsModal();
+      if (els.modalPresets && !els.modalPresets.hidden) closePresetsModal();
       return;
     }
 
@@ -130,13 +131,14 @@ function init() {
   setupTimelineInput();
   setupBgPicker();
   setupOnionControls();
+  setupPresetsControls();
 
   // Связываем колбэки для Gizmo
   App.syncProperties = syncPropertyInputs;
   App.onPartChanged = (part, kind, isLive) => {
     updateSelSize();
-    if (App.anim.onion && !isLive) renderOnionSkins();
     onPartEdited(part, kind, isLive);
+    if (App.anim.onion && !isLive) renderOnionSkins();
   };
   App.onChange = () => {
     if (App.anim.onion) renderOnionSkins();

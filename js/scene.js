@@ -55,6 +55,11 @@ function computeClipOffset(forceRecompute) {
 
 function renderScene() {
   els.scene.innerHTML = '';
+  App._partDomMap = {};
+  App._onionPoolDirty = true;
+  if (els.onion) els.onion.innerHTML = '';
+  App._onionPool = [];
+
   if (!App.settings) return;
   const parts = App.settings.parts;
   const gMap = {};
@@ -62,19 +67,23 @@ function renderScene() {
   for (const p of parts) {
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('data-part-id', p.id);
+    const hid = (p.visible === false);
     let cls = 'part';
     if (p.isGroup) cls += ' part-group';
-    if (p.visible === false) cls += ' part-hidden';
+    if (hid) cls += ' part-hidden';
     g.setAttribute('class', cls);
     g.setAttribute('transform', partTransform(p));
-    if (p.opacity !== undefined && p.opacity !== 1 && p.visible !== false) {
-      g.style.opacity = p.opacity;
+    g.style.display = hid ? 'none' : '';
+    if (p.opacity !== undefined && p.opacity !== 1) {
+      g.style.opacity = String(p.opacity);
     }
 
     if (!p.isGroup) {
       const svgEl = App.svgCache[p.file];
       if (svgEl) {
-        const inner = document.importNode(svgEl, true);
+        const inner = (typeof cloneSvgForDom === 'function')
+          ? cloneSvgForDom(svgEl)
+          : document.importNode(svgEl, true);
         inner.setAttribute('class', 'part-inner');
         g.appendChild(inner);
       }
@@ -88,13 +97,41 @@ function renderScene() {
     const parentEl = (p.parent && gMap[p.parent]) ? gMap[p.parent] : els.scene;
     parentEl.appendChild(g);
   }
+
+  App._partDomMap = gMap;
+}
+
+// Быстрое обновление трансформаций и видимости без пересоздания SVG DOM (60 FPS)
+function syncSceneTransforms() {
+  if (!App.settings) return;
+  const gMap = App._partDomMap;
+  if (!gMap) {
+    renderScene();
+    return;
+  }
+  const parts = App.settings.parts;
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const g = gMap[p.id];
+    if (!g) {
+      renderScene();
+      return;
+    }
+    g.setAttribute('transform', partTransform(p));
+    const hid = (p.visible === false);
+    g.classList.toggle('part-hidden', hid);
+    g.style.display = hid ? 'none' : '';
+  }
 }
 
 function updatePartTransform(part) {
-  const g = els.scene.querySelector('[data-part-id="' + part.id + '"]');
+  const g = (App._partDomMap && App._partDomMap[part.id]) ||
+            els.scene.querySelector('[data-part-id="' + part.id + '"]');
   if (g) {
+    const hid = (part.visible === false);
     g.setAttribute('transform', partTransform(part));
-    g.classList.toggle('part-hidden', part.visible === false);
+    g.classList.toggle('part-hidden', hid);
+    g.style.display = hid ? 'none' : '';
   }
   updateSelSize();
   if (App.anim.onion) renderOnionSkins();
@@ -118,82 +155,159 @@ function updateSelSize() {
   els.selSize.textContent = w.toFixed(1) + ', ' + h.toFixed(1);
 }
 
-// -------- Onion Skin (луковая кожура) --------
+// -------- Onion Skin (луковая кожура: 75% / 50% / 25% без пересоздания DOM) --------
 
-function buildGhostTreeAtTime(time, opacity, filterCss) {
-  const pose = evaluatePoseAtTime(time);
-  if (!pose) return null;
+const ONION_OPACITIES = [0.75, 0.50, 0.25];
+
+function createOnionSlot() {
   const wrap = document.createElementNS(SVG_NS, 'g');
   wrap.setAttribute('class', 'part-ghost');
-  wrap.style.opacity = String(opacity);
-  if (filterCss) wrap.style.filter = filterCss;
+  wrap.style.display = 'none';
 
-  const parts = App.settings.parts;
+  const parts = App.settings ? App.settings.parts : [];
   const gMap = {};
-  for (const p of parts) {
-    const st = pose[p.id];
-    if (!st) continue;
+
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
     const g = document.createElementNS(SVG_NS, 'g');
-    if (!st.visible) g.style.display = 'none';
-    g.setAttribute('transform', partTransformFrom(p, st.transform));
-    if (!p.isGroup && st.visible) {
+    if (!p.isGroup) {
       const svgEl = App.svgCache[p.file];
       if (svgEl) {
-        const inner = document.importNode(svgEl, true);
+        const inner = (typeof cloneSvgForDom === 'function')
+          ? cloneSvgForDom(svgEl)
+          : document.importNode(svgEl, true);
         g.appendChild(inner);
       }
     }
     gMap[p.id] = g;
   }
-  for (const p of parts) {
+
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
     const g = gMap[p.id];
     if (!g) continue;
     const parentEl = (p.parent && gMap[p.parent]) ? gMap[p.parent] : wrap;
     parentEl.appendChild(g);
   }
-  return wrap;
+
+  return { wrap, gMap };
+}
+
+function ensureOnionPool(neededCount) {
+  if (!els.onion || !App.settings) return;
+  if (App._onionPoolDirty) {
+    els.onion.innerHTML = '';
+    App._onionPool = [];
+    App._onionPoolDirty = false;
+  }
+  while (App._onionPool.length < neededCount) {
+    const slot = createOnionSlot();
+    els.onion.appendChild(slot.wrap);
+    App._onionPool.push(slot);
+  }
+}
+
+function hideAllOnionSlots() {
+  if (!App._onionPool) return;
+  for (let i = 0; i < App._onionPool.length; i++) {
+    App._onionPool[i].wrap.style.display = 'none';
+  }
 }
 
 function renderOnionSkins() {
   if (!els.onion) return;
-  els.onion.innerHTML = '';
-  if (!App.anim.onion || !App.settings) return;
+  if (!App.anim.onion || !App.settings) {
+    hideAllOnionSlots();
+    return;
+  }
   const a = getCurrentAnimation();
-  if (!a) return;
-
-  const fps = (App.settings && App.settings.fps) || 60;
-  const dt = 1 / fps;
-  const dur = a.duration || 1;
-  const cur = snapTime(App.anim.time);
-  const before = clamp(parseInt(App.anim.onionBefore, 10) || 0, 0, 3);
-  const after  = clamp(parseInt(App.anim.onionAfter, 10) || 0, 0, 3);
-
-  // Кадры ДО текущего (дальние бледнее, лёгкий холодный оттенок)
-  for (let k = before; k >= 1; k--) {
-    let t = cur - k * dt;
-    if (t < -1e-6) {
-      if (App.anim.loop && dur > dt) t = dur + t;
-      else continue;
-    }
-    t = clamp(t, 0, dur);
-    if (Math.abs(t - cur) < 1e-6) continue;
-    const op = 0.28 / k;
-    const g = buildGhostTreeAtTime(t, op, 'sepia(1) hue-rotate(170deg) saturate(2)');
-    if (g) els.onion.appendChild(g);
+  if (!a) {
+    hideAllOnionSlots();
+    return;
   }
 
-  // Кадры ПОСЛЕ текущего (лёгкий зелёно-тёплый оттенок)
-  for (let k = after; k >= 1; k--) {
-    let t = cur + k * dt;
-    if (t > dur + 1e-6) {
-      if (App.anim.loop && dur > dt) t = t - dur;
-      else continue;
+  const before = clamp(parseInt(App.anim.onionBefore, 10) || 0, 0, 3);
+  const after  = clamp(parseInt(App.anim.onionAfter, 10) || 0, 0, 3);
+  if (before === 0 && after === 0) {
+    hideAllOnionSlots();
+    return;
+  }
+
+  const fps = (App.settings && App.settings.fps) || 60;
+  const dur = a.duration || 1;
+  const totalFrames = Math.max(1, Math.round(dur * fps));
+  if (totalFrames <= 1) {
+    hideAllOnionSlots();
+    return;
+  }
+
+  // Шаг между призрачными кадрами: для 60 FPS берём заметный интервал (до 5 кадров),
+  // чтобы соседние позы не сливались в 0.05px за контуром персонажа
+  const stepFrames = fps >= 30 ? Math.max(1, Math.min(5, Math.floor(totalFrames / 4))) : 1;
+  const stepDt = stepFrames / fps;
+
+  const cur = App.anim.playing ? App.anim.time : snapTime(App.anim.time);
+  const lo = clamp(App.anim.loopStart || 0, 0, dur);
+  const hi = clamp(Math.max(lo + 0.001, App.anim.loopEnd || dur), lo + 0.001, dur);
+  const span = hi - lo;
+
+  function resolveGhostTime(rawT) {
+    if (App.anim.loop && span > stepDt * 0.5) {
+      return lo + ((((rawT - lo) % span) + span) % span);
     }
-    t = clamp(t, 0, dur);
-    if (Math.abs(t - cur) < 1e-6) continue;
-    const op = 0.24 / k;
-    const g = buildGhostTreeAtTime(t, op, 'sepia(1) hue-rotate(65deg) saturate(2)');
-    if (g) els.onion.appendChild(g);
+    if (rawT < -1e-6 || rawT > dur + 1e-6) return null;
+    return clamp(rawT, 0, dur);
+  }
+
+  // Собираем список призраков от самых дальних (25%) к ближайшим (75%)
+  const ghosts = [];
+  const maxK = Math.max(before, after);
+  for (let k = maxK; k >= 1; k--) {
+    const op = ONION_OPACITIES[k - 1] || 0.25;
+    if (k <= before) {
+      const tb = resolveGhostTime(cur - k * stepDt);
+      if (tb !== null && Math.abs(tb - cur) > 1e-5) {
+        ghosts.push({ time: tb, opacity: op });
+      }
+    }
+    if (k <= after) {
+      const ta = resolveGhostTime(cur + k * stepDt);
+      if (ta !== null && Math.abs(ta - cur) > 1e-5) {
+        ghosts.push({ time: ta, opacity: op });
+      }
+    }
+  }
+
+  ensureOnionPool(ghosts.length);
+  const parts = App.settings.parts;
+
+  for (let i = 0; i < ghosts.length; i++) {
+    const gh = ghosts[i];
+    const slot = App._onionPool[i];
+    const pose = evaluatePoseAtTime(gh.time);
+    if (!pose) {
+      slot.wrap.style.display = 'none';
+      continue;
+    }
+    slot.wrap.style.display = '';
+    slot.wrap.style.opacity = String(gh.opacity);
+
+    for (let j = 0; j < parts.length; j++) {
+      const p = parts[j];
+      const g = slot.gMap[p.id];
+      const st = pose[p.id];
+      if (!g || !st) continue;
+      if (!st.visible) {
+        g.style.display = 'none';
+      } else {
+        g.style.display = '';
+        g.setAttribute('transform', partTransformFrom(p, st.transform));
+      }
+    }
+  }
+
+  for (let i = ghosts.length; i < App._onionPool.length; i++) {
+    App._onionPool[i].wrap.style.display = 'none';
   }
 }
 

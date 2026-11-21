@@ -36,7 +36,92 @@
   --select:   #6fa8d4;
   --mode2:    #a98cd4;
 }
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #3a414a rgba(16, 18, 22, 0.35);
+}
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+*::-webkit-scrollbar-track {
+  background: rgba(16, 18, 22, 0.35);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3a414a;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #557a9e;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--select);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============ custom range sliders ============ */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 18px;
+  margin: 0;
+}
+input[type="range"]:focus {
+  outline: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  background: var(--bg-4);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--select);
+  border: 2px solid var(--bg-2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: transform .1s ease, background .1s ease, box-shadow .1s ease;
+}
+input[type="range"]:hover::-webkit-slider-thumb {
+  background: #86bcf0;
+  box-shadow: 0 0 0 3px rgba(111, 168, 212, 0.22);
+}
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.1);
+  background: #9dd0ff;
+}
+input[type="range"]::-moz-range-track {
+  height: 5px;
+  background: var(--bg-4);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--select);
+  border: 2px solid var(--bg-2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: transform .1s ease, background .1s ease;
+}
+input[type="range"]:hover::-moz-range-thumb {
+  background: #86bcf0;
+}
+
 html, body { margin: 0; height: 100%; overflow: hidden; }
 body {
   background: var(--bg); color: var(--fg);
@@ -469,16 +554,16 @@ aside.right {
 }
 
 #layers-list {
-  list-style: none; margin: 0; padding: 4px;
+  list-style: none; margin: 0; padding: 8px 6px;
   overflow-y: auto; flex: 1 1 auto; min-height: 60px;
 }
 #layers-list li {
   display: flex; align-items: center; gap: 6px;
-  padding: 4px 8px; border-radius: 4px; cursor: pointer;
+  padding: 5px 8px; border-radius: 4px; cursor: pointer;
   color: var(--fg); font-size: 12px;
   position: relative;
-  border-top: 2px solid transparent;
-  border-bottom: 2px solid transparent;
+  margin-bottom: 1px;
+  overflow: visible;
 }
 #layers-list li:hover    { background: var(--bg-3); }
 #layers-list li.selected { background: var(--bg-4); color: #fff; }
@@ -491,10 +576,77 @@ aside.right {
 #layers-list li.depth-6  { padding-left: 92px; }
 #layers-list li .layer-icon { font-size: 14px; color: var(--fg-mute); }
 #layers-list li.selected .layer-icon { color: var(--select); }
-#layers-list li.dragging { opacity: 0.4; }
-#layers-list li.drop-before { border-top-color: var(--select); }
-#layers-list li.drop-after  { border-bottom-color: var(--select); }
-#layers-list li.drop-into   { box-shadow: inset 0 0 0 1.5px var(--select); }
+#layers-list li.dragging { opacity: 0.38; }
+
+/* Inkscape-style индикатор вставки ВЫШЕ слоя (яркая линия + углы вверх ◣━━━◢) */
+#layers-list li.drop-before {
+  background-image:
+    linear-gradient(90deg, #8ce0ff 0%, #52baff 50%, #8ce0ff 100%),
+    linear-gradient(180deg, rgba(82, 186, 255, 0.16) 0%, transparent 60%);
+  background-size: 100% 2.5px, 100% 100%;
+  background-position: 0 0, 0 0;
+  background-repeat: no-repeat;
+  box-shadow: 0 -2px 7px rgba(82, 186, 255, 0.55);
+  z-index: 4;
+}
+#layers-list li.drop-before::before,
+#layers-list li.drop-before::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(94, 194, 255, 0.9));
+}
+#layers-list li.drop-before::before {
+  left: -1px;
+  border-bottom: 8.5px solid #8ce0ff;
+  border-right: 8.5px solid transparent;
+}
+#layers-list li.drop-before::after {
+  right: -1px;
+  border-bottom: 8.5px solid #8ce0ff;
+  border-left: 8.5px solid transparent;
+}
+
+/* Inkscape-style индикатор вставки НИЖЕ слоя (яркая линия + углы вниз ◤━━━◥) */
+#layers-list li.drop-after {
+  background-image:
+    linear-gradient(90deg, #8ce0ff 0%, #52baff 50%, #8ce0ff 100%),
+    linear-gradient(0deg, rgba(82, 186, 255, 0.16) 0%, transparent 60%);
+  background-size: 100% 2.5px, 100% 100%;
+  background-position: 0 100%, 0 0;
+  background-repeat: no-repeat;
+  box-shadow: 0 2px 7px rgba(82, 186, 255, 0.55);
+  z-index: 4;
+}
+#layers-list li.drop-after::before,
+#layers-list li.drop-after::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(94, 194, 255, 0.9));
+}
+#layers-list li.drop-after::before {
+  left: -1px;
+  border-top: 8.5px solid #8ce0ff;
+  border-right: 8.5px solid transparent;
+}
+#layers-list li.drop-after::after {
+  right: -1px;
+  border-top: 8.5px solid #8ce0ff;
+  border-left: 8.5px solid transparent;
+}
+
+/* Вставка ВНУТРЬ слоя/группы (дочерним элементом) */
+#layers-list li.drop-into {
+  background: rgba(82, 186, 255, 0.14);
+  box-shadow: inset 0 0 0 1.5px #66c4ff, 0 0 6px rgba(82, 186, 255, 0.35);
+}
 
 /* ==================== properties ==================== */
 .props {
@@ -807,7 +959,12 @@ aside.right {
 /* ====== ghost & hidden parts ====== */
 .part-ghost { pointer-events: none; }
 .part-ghost * { pointer-events: none; }
-.part.part-hidden { opacity: 0 !important; pointer-events: none !important; }
+.part.part-hidden {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 .part.part-hidden * { pointer-events: none !important; }
 /* два типа кадров */
 .tl-key { background: var(--fg-dim); }
@@ -900,3 +1057,77 @@ aside.right {
 .st-check input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; }
 .st-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .st-field { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--fg-dim); }
+
+/* ====== модалка пресетов поз ====== */
+.modal-box-presets { min-width: 470px; max-width: 560px; }
+.presets-body {
+  display: flex; flex-direction: column; gap: 10px;
+  overflow-y: auto; max-height: 68vh;
+}
+.preset-save-box,
+.preset-opts-box {
+  background: var(--bg-3); border: 1px solid var(--line);
+  border-radius: 6px; padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.preset-save-row {
+  display: flex; align-items: stretch; gap: 6px;
+}
+.preset-save-row .text-input { flex: 1; }
+.preset-save-row button {
+  background: var(--accent); border: 1px solid var(--accent); color: #fff;
+  padding: 5px 12px; border-radius: 5px; cursor: pointer; font: inherit; font-size: 12px;
+  white-space: nowrap;
+}
+.preset-save-row button:hover { background: #5a8bb8; }
+.preset-scope-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+}
+.preset-scope-row .pcheck,
+.preset-opts-box .pcheck {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--fg); cursor: pointer;
+}
+.preset-scope-row input[type="radio"],
+.preset-opts-box input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin: 0; cursor: pointer;
+}
+.preset-opts-box code {
+  background: var(--bg-2); padding: 1px 4px; border-radius: 3px;
+  font-family: ui-monospace, Consolas, monospace; color: var(--fg);
+}
+.presets-list {
+  list-style: none; margin: 0; padding: 4px;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px;
+  min-height: 110px; max-height: 210px; overflow-y: auto;
+}
+.presets-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 9px; border-radius: 4px; cursor: pointer;
+  color: var(--fg); font-size: 12px;
+}
+.presets-list li:hover { background: var(--bg-4); }
+.presets-list li.selected { background: var(--accent); color: #fff; }
+.presets-list li.preset-empty {
+  color: var(--fg-mute); cursor: default; justify-content: center;
+  padding: 20px 10px; font-size: 11.5px;
+}
+.presets-list li.preset-empty:hover { background: transparent; }
+.preset-item-title {
+  font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preset-item-badges {
+  display: flex; align-items: center; gap: 5px; flex: 0 0 auto;
+}
+.preset-badge {
+  font-size: 10.5px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25); color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.presets-list li.selected .preset-badge {
+  background: rgba(255, 255, 255, 0.18); color: #fff;
+}
+.preset-footer-right {
+  display: flex; align-items: center; gap: 6px;
+}
