@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "name": "plate",
+  "fps": 60,
+  "frame": {
+    "width": 512,
+    "height": 512,
+    "background": "grid"
+  },
+  "clip": {
+    "pivot": {
+      "x": 0.5,
+      "y": 0.5
+    }
+  },
+  "parts": [
+    {
+      "id": "body",
+      "file": "body.svg",
+      "parent": null,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    }
+  ],
+  "animations": [
+    {
+      "name": "idle",
+      "duration": 1,
+      "loop": true,
+      "tracks": []
+    }
+  ]
+}

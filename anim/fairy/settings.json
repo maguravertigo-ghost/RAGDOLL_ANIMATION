@@ -1,0 +1,3276 @@
+{
+  "version": 1,
+  "name": "fairy",
+  "fps": 60,
+  "frame": {
+    "width": 512,
+    "height": 512,
+    "background": "#274077"
+  },
+  "clip": {
+    "pivot": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "offset": {
+      "x": 0.7549037933349609,
+      "y": 108.81071853637695
+    }
+  },
+  "parts": [
+    {
+      "id": "shadow",
+      "file": "shadow.svg",
+      "parent": "all_character",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 19.714704269077394,
+          "y": 46.73977954014629
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 0.9979385533534569,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "h_long_L",
+      "file": "h_long_L.svg",
+      "parent": "person_gr",
+      "pivot": {
+        "x": 0.11143329848684229,
+        "y": 0.061472302493933345
+      },
+      "transform": {
+        "position": {
+          "x": 21.882898767198327,
+          "y": 20.710452548206746
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "h_long_R",
+      "file": "h_long_R.svg",
+      "parent": "person_gr",
+      "pivot": {
+        "x": 0.8978609298494126,
+        "y": 0.07840551851399608
+      },
+      "transform": {
+        "position": {
+          "x": 17.169979770387414,
+          "y": 26.08099054449886
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "dress",
+      "file": "dress.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.5476125193456483,
+        "y": 0.041915127813043816
+      },
+      "transform": {
+        "position": {
+          "x": 20.216387469972375,
+          "y": 32.60009901875347
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "sleeve_L",
+      "file": "sleeve_L.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.21519790988952403,
+        "y": 0.2563485144904734
+      },
+      "transform": {
+        "position": {
+          "x": 24.053506572450402,
+          "y": 26.697187772930562
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": false,
+      "opacity": 1
+    },
+    {
+      "id": "sleeve_R",
+      "file": "sleeve_R.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.7709465596092171,
+        "y": 0.25033702796216534
+      },
+      "transform": {
+        "position": {
+          "x": 14.274234492982629,
+          "y": 25.998668304623067
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": false,
+      "opacity": 1
+    },
+    {
+      "id": "arm_L",
+      "file": "arm_L.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.05119574414595992,
+        "y": 0.14238838975964788
+      },
+      "transform": {
+        "position": {
+          "x": 23.804163654054406,
+          "y": 27.09086989516109
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": -7.951386703658793e-16,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "arm_R",
+      "file": "arm_R.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.9240966645593364,
+        "y": 0.11089644300877402
+      },
+      "transform": {
+        "position": {
+          "x": 15.145548541749719,
+          "y": 26.104445210636555
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "body",
+      "file": "body.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.5551064416756399,
+        "y": 0.9194543136142943
+      },
+      "transform": {
+        "position": {
+          "x": 20.32599421283126,
+          "y": 34.35374259108394
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "hat_tail",
+      "file": "hat_tail.svg",
+      "parent": "head_gr",
+      "pivot": {
+        "x": 0.9672925437843123,
+        "y": 0.25049401716417885
+      },
+      "transform": {
+        "position": {
+          "x": 12.346135814393762,
+          "y": 2.805503121555745
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "head_n_hat",
+      "file": "head_n_hat.svg",
+      "parent": "head_gr",
+      "pivot": {
+        "x": 0.45388748259567535,
+        "y": 0.9538105229562958
+      },
+      "transform": {
+        "position": {
+          "x": 17.16865702411056,
+          "y": 25.585527411640584
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "eyes",
+      "file": "eyes.svg",
+      "parent": "head_gr",
+      "pivot": {
+        "x": 0.5004719666608488,
+        "y": 0.5485019111137376
+      },
+      "transform": {
+        "position": {
+          "x": 21.604993064607385,
+          "y": 16.610216966808736
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "head_gr",
+      "isGroup": true,
+      "parent": "all_body",
+      "size": {
+        "w": 34.79879873486328,
+        "h": 26.727246979492186
+      },
+      "pivot": {
+        "x": 0.4851049827406264,
+        "y": 0.9470011841084874
+      },
+      "transform": {
+        "position": {
+          "x": 17.627146289858374,
+          "y": 25.310734537539098
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "hair_ch",
+      "file": "hair_ch.svg",
+      "parent": "head_gr",
+      "pivot": {
+        "x": 0.04956747892759052,
+        "y": 0.4927932380653671
+      },
+      "transform": {
+        "position": {
+          "x": 17.60706396838546,
+          "y": 11.792929164112508
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "arm_L_angled",
+      "file": "arm_L_angled.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.8199954691004191,
+        "y": 0.8489584950874001
+      },
+      "transform": {
+        "position": {
+          "x": 30.464323241914514,
+          "y": 30.522275916279256
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": false,
+      "opacity": 1
+    },
+    {
+      "id": "all_body",
+      "isGroup": true,
+      "parent": "person_gr",
+      "size": {
+        "w": 38.304967058555604,
+        "h": 49.71343500476074
+      },
+      "pivot": {
+        "x": 0.5259468576461115,
+        "y": 0.6436837138624447
+      },
+      "transform": {
+        "position": {
+          "x": 21.159932583418502,
+          "y": 31.999728472723636
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "arm_R_angled",
+      "file": "arm_R_angled.svg",
+      "parent": "all_body",
+      "pivot": {
+        "x": 0.17052451182645145,
+        "y": 0.8736742055636416
+      },
+      "transform": {
+        "position": {
+          "x": 7.912123639787438,
+          "y": 30.522274008930623
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": false,
+      "opacity": 1
+    },
+    {
+      "id": "all_character",
+      "isGroup": true,
+      "parent": null,
+      "size": {
+        "w": 39.318522585289,
+        "h": 49.71343500476074
+      },
+      "pivot": {
+        "x": 0.5182824374348458,
+        "y": 0.8988061995806628
+      },
+      "transform": {
+        "position": {
+          "x": -0.09150667769552154,
+          "y": -108.70663755967286
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "person_gr",
+      "isGroup": true,
+      "parent": "all_character",
+      "size": {
+        "w": 39.318522585289,
+        "h": 49.71343500476074
+      },
+      "pivot": {
+        "x": 0.527120007443822,
+        "y": 0.6436837138624447
+      },
+      "transform": {
+        "position": {
+          "x": 20.7255799178377,
+          "y": 31.999716551794716
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    }
+  ],
+  "animations": [
+    {
+      "name": "reset",
+      "duration": 0.016666666666666666,
+      "loop": false,
+      "tracks": [
+        {
+          "partId": "shadow",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 19.714704269077394,
+                "y": 46.73977954014629
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 21.882898767198327,
+                "y": 20.710452548206746
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 17.169979770387414,
+                "y": 26.08099054449886
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.216387469972375,
+                "y": 32.60009901875347
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_L",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 24.053506572450402,
+                "y": 26.697187772930562
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_L",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_L",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_R",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 14.274234492982629,
+                "y": 25.998668304623067
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_R",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_R",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 23.804163654054406,
+                "y": 27.09086989516109
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": -7.951386703658793e-16,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 15.145548541749719,
+                "y": 26.104445210636555
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.32599421283126,
+                "y": 34.35374259108394
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 12.346135814393762,
+                "y": 2.805503121555745
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_n_hat",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 17.16865702411056,
+                "y": 25.585527411640584
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_n_hat",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_n_hat",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_n_hat",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_n_hat",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 21.604993064607385,
+                "y": 16.610216966808736
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_gr",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 17.627146289858374,
+                "y": 25.310734537539098
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_gr",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_gr",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_gr",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head_gr",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 17.60706396838546,
+                "y": 11.792929164112508
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L_angled",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 30.464323241914514,
+                "y": 30.522275916279256
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L_angled",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L_angled",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L_angled",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L_angled",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_body",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 21.159932583418502,
+                "y": 31.999728472723636
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_body",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_body",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_body",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_body",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R_angled",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.912123639787438,
+                "y": 30.522274008930623
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R_angled",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R_angled",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R_angled",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R_angled",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_character",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": -0.09150667769552154,
+                "y": -108.70663755967286
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_character",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_character",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_character",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_character",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "person_gr",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "person_gr",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "person_gr",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "person_gr",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "person_gr",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        }
+      ],
+      "isReset": true,
+      "fps": 60,
+      "loopStart": 0,
+      "loopEnd": 0
+    },
+    {
+      "name": "breathe",
+      "duration": 1,
+      "loop": true,
+      "tracks": [
+        {
+          "partId": "person_gr",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 30.36860606458217
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1.1069856111304288
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": -7.636509188837771,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": 5.476806372010302,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "head_gr",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": -2.822056473845925,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": 14.279409148333105,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": -6.421586742971491,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1.0486015717359183
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1.0604849371102008
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.43333333333333335,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.26666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.38333333333333336,
+              "value": {
+                "x": 1,
+                "y": 0.1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.43333333333333335,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1.0134419162376982,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        }
+      ],
+      "fps": 60
+    },
+    {
+      "name": "owhh",
+      "duration": 1,
+      "loop": true,
+      "tracks": [
+        {
+          "partId": "person_gr",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 29.923757749887844
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.1235887528612338
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.4166666666666667,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 0.8
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.2
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.4166666666666667,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 8.0412189145066,
+              "type": "tween"
+            },
+            {
+              "time": 0.4166666666666667,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": -11.540688510984193,
+              "type": "tween"
+            },
+            {
+              "time": 0.4166666666666667,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_L",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "sleeve_R",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L_angled",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R_angled",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": -9.182171199237194,
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 4.435084201396672,
+              "type": "tween"
+            },
+            {
+              "time": 0.75,
+              "value": -3.9189154692114774,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": -1.9594577346057374,
+              "type": "tween"
+            },
+            {
+              "time": 0.9166666666666666,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": -1.5593002777593774,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": -8.661128939764833,
+              "type": "key"
+            },
+            {
+              "time": 0.75,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": -4.247996815165646,
+              "type": "key"
+            },
+            {
+              "time": 0.9166666666666666,
+              "value": 2.7696929041087164,
+              "type": "key"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.1132599518755095
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.75,
+              "value": {
+                "x": 1,
+                "y": 0.9549349695180279
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.9166666666666666,
+              "value": {
+                "x": 1,
+                "y": 1.0303278315748419
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.0850539653698748
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.75,
+              "value": {
+                "x": 1,
+                "y": 0.969621436962063
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.9166666666666666,
+              "value": {
+                "x": 1,
+                "y": 1.0425262059770224
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "head_n_hat",
+          "property": "rotation",
+          "keys": []
+        },
+        {
+          "partId": "head_gr",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.43333333333333335,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": -1.3691465852043634,
+              "type": "tween"
+            },
+            {
+              "time": 0.5166666666666667,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": -1.369,
+              "type": "tween"
+            },
+            {
+              "time": 0.7333333333333333,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.75,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0.9979385533534569,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 0.7498847472056,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 0.998,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        }
+      ],
+      "fps": 60
+    },
+    {
+      "name": "winner",
+      "duration": 1,
+      "loop": true,
+      "tracks": [
+        {
+          "partId": "person_gr",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 30.961737150841277
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.25830269397083
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 30.813454379276504
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 20.7255799178377,
+                "y": 31.999716551794716
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "dress",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1.0617231102095328
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1.0505783415247314
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.0700247679817563
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 0.972
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1.031
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": {
+                "x": 1,
+                "y": 0.972
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1.031
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 0.972
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.031
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 0.972
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "h_long_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 0.972
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 1,
+                "y": 1.0313713239222138
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": {
+                "x": 1,
+                "y": 0.9720404335761775
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 1,
+                "y": 1.031
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 1,
+                "y": 0.972
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 1,
+                "y": 1.031
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 1,
+                "y": 0.9720404335761775
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "arm_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": -32.17841663752951,
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": -32.178,
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": -32.178,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "arm_R",
+          "property": "scale",
+          "keys": []
+        },
+        {
+          "partId": "arm_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": 27.843757551731017,
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": 27.844,
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": 27.844,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.45,
+              "value": {
+                "x": 1,
+                "y": 0.2
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.55,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "eyes",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            },
+            {
+              "time": 0.4166666666666667,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hair_ch",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.25,
+              "value": -5.172153122160514,
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": -3.7397223768336763,
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.75,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": -3.731270681126923,
+              "type": "tween"
+            },
+            {
+              "time": 0.9166666666666666,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "hat_tail",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.25,
+              "value": -3.593623805611454,
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.5,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.5833333333333334,
+              "value": -2.9243244787554565,
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": 0,
+              "type": "key"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.9166666666666666,
+              "value": -3.150695407417053,
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0.8934717185239516,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 0.9591801461428545,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.3333333333333333,
+              "value": {
+                "x": 0.893,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.5,
+              "value": {
+                "x": 0.9591801461428545,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.6666666666666666,
+              "value": {
+                "x": 0.893,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": {
+                "x": 0.9591801461428545,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 1,
+              "value": {
+                "x": 0.893,
+                "y": 1
+              },
+              "type": "tween"
+            }
+          ]
+        }
+      ],
+      "fps": 60
+    }
+  ]
+}

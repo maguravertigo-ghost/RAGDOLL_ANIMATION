@@ -1,0 +1,873 @@
+{
+  "version": 1,
+  "name": "carrot",
+  "fps": 60,
+  "frame": {
+    "width": 512,
+    "height": 512,
+    "background": "#bd947a"
+  },
+  "clip": {
+    "pivot": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "offset": {
+      "x": -0.000003337860107421875,
+      "y": 2.384185791015625e-7
+    }
+  },
+  "parts": [
+    {
+      "id": "shadow",
+      "file": "shadow.svg",
+      "parent": "all_carrot",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 8.642366341264298,
+          "y": 4.611706571782459
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 0.15831179871176626,
+          "y": 0.8498177647698449
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "tail_1",
+      "file": "tail_1.svg",
+      "parent": "tails_gr",
+      "pivot": {
+        "x": 0.0415322583833611,
+        "y": 0.21880624309910576
+      },
+      "transform": {
+        "position": {
+          "x": 0.3374447297304606,
+          "y": 2.3585668316109114
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "tail_2",
+      "file": "tail_2.svg",
+      "parent": "tails_gr",
+      "pivot": {
+        "x": 0.02593306906290265,
+        "y": 0.9972688676041231
+      },
+      "transform": {
+        "position": {
+          "x": 0.23744479372111105,
+          "y": 2.5585665294216566
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "tails_gr",
+      "isGroup": true,
+      "parent": "all_object",
+      "size": {
+        "w": 8.1248838,
+        "h": 4.787266156427002
+      },
+      "pivot": {
+        "x": 0.04542459803963953,
+        "y": 0.4908640212452049
+      },
+      "transform": {
+        "position": {
+          "x": 7.95729685276747,
+          "y": 2.3498967163148357
+        },
+        "rotation": 76.62420605974978,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "tail_0",
+      "file": "tail_0.svg",
+      "parent": "tails_gr",
+      "pivot": {
+        "x": -0.031090099296470494,
+        "y": 0.6785480134411751
+      },
+      "transform": {
+        "position": {
+          "x": 0.1374447737897917,
+          "y": 2.308566903477425
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "all_carrot",
+      "isGroup": true,
+      "parent": null,
+      "size": {
+        "w": 15.71311107203369,
+        "h": 5.318133290451049
+      },
+      "pivot": {
+        "x": 0.4618625671009984,
+        "y": 0.864945786347584
+      },
+      "transform": {
+        "position": {
+          "x": -0.04337137639522126,
+          "y": 0.16711003928212698
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "all_object",
+      "isGroup": true,
+      "parent": "all_carrot",
+      "size": {
+        "w": 15.71311107203369,
+        "h": 4.85778238074646
+      },
+      "pivot": {
+        "x": 0.5064112903096528,
+        "y": 0.48373857289871897
+      },
+      "transform": {
+        "position": {
+          "x": 7.957296852767477,
+          "y": -9.875803663089451
+        },
+        "rotation": -77.71828153641908,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "body",
+      "file": "body.svg",
+      "parent": "all_object",
+      "pivot": {
+        "x": 0.8117512970135613,
+        "y": 0.3378645562707884
+      },
+      "transform": {
+        "position": {
+          "x": 7.22567284004197,
+          "y": 2.3085667101094662
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    }
+  ],
+  "animations": [
+    {
+      "name": "reset",
+      "duration": 0.016666666666666666,
+      "loop": false,
+      "tracks": [
+        {
+          "partId": "shadow",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.800669185817242,
+                "y": 4.43278694152832
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_1",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0.3374447297304606,
+                "y": 2.3585668316109114
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_1",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_1",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_1",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_1",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_2",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0.23744479372111105,
+                "y": 2.5585665294216566
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_2",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_2",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_2",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_2",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tails_gr",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.95729685276747,
+                "y": 2.3498967163148357
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tails_gr",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tails_gr",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tails_gr",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tails_gr",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_0",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0.1374447737897917,
+                "y": 2.308566903477425
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_0",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_0",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_0",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "tail_0",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_carrot",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": -0.04337137639522126,
+                "y": 0.16711003928212698
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_carrot",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_carrot",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_carrot",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_carrot",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.957296852767477,
+                "y": 2.349896954733414
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.22567284004197,
+                "y": 2.3085667101094662
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "body",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        }
+      ],
+      "isReset": true,
+      "fps": 60,
+      "loopStart": 0,
+      "loopEnd": 0
+    },
+    {
+      "name": "drag",
+      "duration": 0.166,
+      "loop": false,
+      "tracks": [
+        {
+          "partId": "all_object",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.957296852767477,
+                "y": 2.349896954733414
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 7.957296852767477,
+                "y": -9.924902862357815
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": -78.03040314901514,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "tails_gr",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": 76.93193379492949,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 0.15493152481101033,
+                "y": 0.8492146232628965
+              },
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 7.800669185817242,
+                "y": 4.43278694152832
+              },
+              "type": "tween"
+            },
+            {
+              "time": 0.16666666666666666,
+              "value": {
+                "x": 8.645746651125531,
+                "y": 4.612425124514403
+              },
+              "type": "tween"
+            }
+          ]
+        }
+      ],
+      "fps": 60
+    }
+  ]
+}

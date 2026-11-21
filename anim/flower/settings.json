@@ -1,0 +1,683 @@
+{
+  "version": 1,
+  "name": "flower",
+  "fps": 60,
+  "frame": {
+    "width": 512,
+    "height": 512,
+    "background": "grid"
+  },
+  "clip": {
+    "pivot": {
+      "x": 0.5,
+      "y": 0.5
+    },
+    "offset": {
+      "x": 25.307780265808105,
+      "y": 33.812663078308105
+    }
+  },
+  "parts": [
+    {
+      "id": "shadow",
+      "file": "shadow.svg",
+      "parent": "all_object",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 6.744475542008871,
+          "y": 11.505682037025693
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "leg",
+      "file": "leg.svg",
+      "parent": "leg_n_head",
+      "pivot": {
+        "x": 0.9254423257991475,
+        "y": 0.9888089839428945
+      },
+      "transform": {
+        "position": {
+          "x": 9.194475982338183,
+          "y": 11.705682987719769
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "leg_n_head",
+      "isGroup": true,
+      "parent": "all_object",
+      "size": {
+        "w": 9.58720513215332,
+        "h": 11.79586940836792
+      },
+      "pivot": {
+        "x": 0.9556168320610534,
+        "y": 0.9934661631314058
+      },
+      "transform": {
+        "position": {
+          "x": 9.161694119870667,
+          "y": 11.718796168256095
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "head",
+      "file": "head.svg",
+      "parent": "leg_n_head",
+      "pivot": {
+        "x": 0.5127586430300717,
+        "y": 0.47444921105988536
+      },
+      "transform": {
+        "position": {
+          "x": 4.644476050138465,
+          "y": 4.105683100968598
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "all_object",
+      "isGroup": true,
+      "parent": null,
+      "size": {
+        "w": 12.14224531628418,
+        "h": 12.420492964587403
+      },
+      "pivot": {
+        "x": 0.5033412726273243,
+        "y": 0.8790953116742128
+      },
+      "transform": {
+        "position": {
+          "x": -25.33278196389855,
+          "y": -33.78688440845581
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "leaf",
+      "file": "leaf.svg",
+      "parent": "all_object",
+      "pivot": {
+        "x": 0.39399752788779185,
+        "y": 0.9605425965991347
+      },
+      "transform": {
+        "position": {
+          "x": 9.944475494325161,
+          "y": 11.70568203404546
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    }
+  ],
+  "animations": [
+    {
+      "name": "reset",
+      "duration": 0.016666666666666666,
+      "loop": false,
+      "tracks": [
+        {
+          "partId": "shadow",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 6.744475542008871,
+                "y": 11.505682037025693
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "shadow",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 9.194475982338183,
+                "y": 11.705682987719769
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg_n_head",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 9.161694119870667,
+                "y": 11.718796168256095
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg_n_head",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg_n_head",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg_n_head",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leg_n_head",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 4.644476050138465,
+                "y": 4.105683100968598
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "head",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": -25.33278196389855,
+                "y": -33.78688440845581
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "all_object",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leaf",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 9.944475494325161,
+                "y": 11.70568203404546
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leaf",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leaf",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leaf",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              },
+              "type": "key"
+            }
+          ]
+        },
+        {
+          "partId": "leaf",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1,
+              "type": "key"
+            }
+          ]
+        }
+      ],
+      "isReset": true,
+      "fps": 60,
+      "loopStart": 0,
+      "loopEnd": 0
+    },
+    {
+      "name": "idle",
+      "duration": 2,
+      "loop": true,
+      "tracks": [
+        {
+          "partId": "leg_n_head",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": -3.536252916067225,
+              "type": "tween"
+            },
+            {
+              "time": 1.5,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 1.6666666666666667,
+              "value": -2.502467783750052,
+              "type": "tween"
+            },
+            {
+              "time": 2,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "leaf",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": 16.446729471544423,
+              "type": "tween"
+            },
+            {
+              "time": 1.5,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 1.6666666666666667,
+              "value": 8.992917068440697,
+              "type": "tween"
+            },
+            {
+              "time": 2,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        },
+        {
+          "partId": "head",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 0.8333333333333334,
+              "value": 6.728489279344689,
+              "type": "tween"
+            },
+            {
+              "time": 1.5,
+              "value": 0,
+              "type": "tween"
+            },
+            {
+              "time": 1.6666666666666667,
+              "value": 3.1984466445109576,
+              "type": "tween"
+            },
+            {
+              "time": 2,
+              "value": 0,
+              "type": "tween"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

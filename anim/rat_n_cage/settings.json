@@ -1,0 +1,978 @@
+{
+  "version": 1,
+  "name": "rat_n_cage",
+  "fps": 60,
+  "frame": {
+    "width": 512,
+    "height": 512,
+    "background": "grid"
+  },
+  "clip": {
+    "pivot": {
+      "x": 0.5,
+      "y": 0.5
+    }
+  },
+  "parts": [
+    {
+      "id": "tail_back",
+      "file": "tail_back.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 20.379839014695463,
+          "y": 14.547720905934082
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "cage_back",
+      "file": "cage_back.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 11.87210464477539,
+          "y": 10.114112854003906
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "rat_body",
+      "file": "rat_body.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 10.95956757824785,
+          "y": 14.188239171993796
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "cage_face",
+      "file": "cage_face.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 11.87210464477539,
+          "y": 10.114112854003906
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "rat_fingers_L",
+      "file": "rat_fingers_L.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 11.752277400128627,
+          "y": 16.704611309575792
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "rat_fingers_R",
+      "file": "rat_fingers_R.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 4.802297210616459,
+          "y": 16.70461130957579
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "tail_face",
+      "file": "tail_face.svg",
+      "parent": "group_mud4qn2l_7ndu",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 19.660875546814886,
+          "y": 20.119687782008498
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "rat_face",
+      "file": "rat_face.svg",
+      "parent": "group_mud4q66f_ug8h",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 6.850049768830338,
+          "y": 6.006128912522783
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "group_mud4qn2l_7ndu",
+      "isGroup": true,
+      "parent": null,
+      "size": {
+        "w": 29.361064683654785,
+        "h": 26.062667221435547
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 2.808427697052002,
+          "y": 2.917220756713867
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "group_mud4q66f_ug8h",
+      "isGroup": true,
+      "parent": "group_mud4qn2l_7ndu",
+      "size": {
+        "w": 13.7001,
+        "h": 12.012258
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 8.397114781188964,
+          "y": 16.16538879614258
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "rat_eyes",
+      "file": "rat_eyes.svg",
+      "parent": "group_mud4q66f_ug8h",
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "transform": {
+        "position": {
+          "x": 6.275039923936131,
+          "y": 2.904853013902903
+        },
+        "rotation": 0,
+        "scale": {
+          "x": 1,
+          "y": 1
+        },
+        "skew": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "visible": true,
+      "opacity": 1
+    }
+  ],
+  "animations": [
+    {
+      "name": "reset",
+      "duration": 1,
+      "loop": false,
+      "tracks": [
+        {
+          "partId": "tail_back",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 20.379839014695463,
+                "y": 14.547720905934082
+              }
+            }
+          ]
+        },
+        {
+          "partId": "tail_back",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "tail_back",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "tail_back",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "tail_back",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "cage_back",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 11.87210464477539,
+                "y": 10.114112854003906
+              }
+            }
+          ]
+        },
+        {
+          "partId": "cage_back",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "cage_back",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "cage_back",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "cage_back",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "rat_body",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 10.95956757824785,
+                "y": 14.188239171993796
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_body",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "rat_body",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_body",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_body",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "cage_face",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 11.87210464477539,
+                "y": 10.114112854003906
+              }
+            }
+          ]
+        },
+        {
+          "partId": "cage_face",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "cage_face",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "cage_face",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "cage_face",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_L",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 11.752277400128627,
+                "y": 16.704611309575792
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_L",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_L",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_L",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_L",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_R",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 4.802297210616459,
+                "y": 16.70461130957579
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_R",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_R",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_R",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_fingers_R",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "tail_face",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 19.660875546814886,
+                "y": 20.119687782008498
+              }
+            }
+          ]
+        },
+        {
+          "partId": "tail_face",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "tail_face",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "tail_face",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "tail_face",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "rat_face",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 6.850049768830338,
+                "y": 6.006128912522783
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_face",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "rat_face",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_face",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_face",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4qn2l_7ndu",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 2.808427697052002,
+                "y": 2.917220756713867
+              }
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4qn2l_7ndu",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4qn2l_7ndu",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4qn2l_7ndu",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4qn2l_7ndu",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4q66f_ug8h",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 8.397114781188964,
+                "y": 16.16538879614258
+              }
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4q66f_ug8h",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4q66f_ug8h",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4q66f_ug8h",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "group_mud4q66f_ug8h",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "partId": "rat_eyes",
+          "property": "position",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 6.275039923936131,
+                "y": 2.904853013902903
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_eyes",
+          "property": "rotation",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "partId": "rat_eyes",
+          "property": "scale",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 1,
+                "y": 1
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_eyes",
+          "property": "skew",
+          "keys": [
+            {
+              "time": 0,
+              "value": {
+                "x": 0,
+                "y": 0
+              }
+            }
+          ]
+        },
+        {
+          "partId": "rat_eyes",
+          "property": "visible",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "isReset": true,
+      "fps": 60
+    },
+    {
+      "name": "idle",
+      "duration": 1,
+      "loop": true,
+      "tracks": []
+    }
+  ]
+}
