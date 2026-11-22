@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <title>Animation Editor</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body data-editor-mode="object">
   <header>
     <span class="brand">Animation Editor</span>
-    <span class="app-version" id="app-version">v0.4.0</span>
+    <span class="app-version" id="app-version">v0.5.0</span>
 
     <button class="mode-switch-btn mode-object" id="btn-editor-mode" type="button" title="Переключить режим: Анимация объектов (малиновый) / Редактор сцены (зелёный)">
       <span class="material-icons" id="editor-mode-icon">animation</span>
@@ -70,30 +70,27 @@
     <section class="center">
       <div class="viewport" id="viewport">
         <svg id="scene-svg" xmlns="http://www.w3.org/2000/svg">
-          <defs id="stage-defs">
-            <clipPath id="stage-clip-path">
-              <rect id="stage-clip-rect" x="-683" y="-384" width="1366" height="768"></rect>
-            </clipPath>
-          </defs>
+          <defs id="stage-defs"></defs>
           <g id="world">
-            <g id="stage-root" hidden>
-              <rect id="stage-shadow-rect" class="stage-shadow-rect" x="-683" y="-384" width="1366" height="768"></rect>
-              <g id="stage-content">
-                <g id="stage-bg-group">
-                  <rect id="stage-bg-rect" x="-683" y="-384" width="1366" height="768" fill="#243447"></rect>
-                  <g id="stage-bg-media"></g>
-                </g>
-                <g id="stage-layers-svg"></g>
-              </g>
-              <rect id="stage-frame-border" class="stage-frame-border" x="-683" y="-384" width="1366" height="768" vector-effect="non-scaling-stroke"></rect>
-            </g>
+            <g id="stage-root" style="display:none"></g>
             <g id="grid"></g>
             <g id="onion" class="part-ghost"></g>
             <g id="scene"></g>
           </g>
         </svg>
+        <svg id="stage-guides-svg" xmlns="http://www.w3.org/2000/svg" hidden></svg>
         <svg id="gizmo-svg" xmlns="http://www.w3.org/2000/svg"></svg>
         <svg id="stage-gizmo-svg" xmlns="http://www.w3.org/2000/svg" hidden></svg>
+
+        <div class="stage-ruler-corner" id="stage-ruler-corner" hidden title="Линейки сцены (двойной клик — удалить все направляющие)">px</div>
+        <div class="stage-ruler stage-ruler-h" id="stage-ruler-h" hidden title="Потяните мышкой вниз на сцену, чтобы вытащить горизонтальную направляющую">
+          <canvas id="stage-ruler-h-canvas"></canvas>
+          <div class="stage-ruler-hair stage-ruler-hair-x" id="stage-ruler-hair-x"></div>
+        </div>
+        <div class="stage-ruler stage-ruler-v" id="stage-ruler-v" hidden title="Потяните мышкой вправо на сцену, чтобы вытащить вертикальную направляющую">
+          <canvas id="stage-ruler-v-canvas"></canvas>
+          <div class="stage-ruler-hair stage-ruler-hair-y" id="stage-ruler-hair-y"></div>
+        </div>
       </div>
 
 	<div class="tools-row">
@@ -156,13 +153,27 @@
 	  </label>
 
 	  <span class="sep stage-mode-only" hidden></span>
+	  <button class="icon-btn active stage-mode-only" id="btn-stage-rulers" title="Линейки и направляющие (потяните мышкой из линейки): вкл/выкл" hidden>
+		<span class="material-icons">straighten</span>
+	  </button>
+	  <button class="icon-btn active stage-mode-only" id="btn-stage-guide-snap" title="Привязка объектов к направляющим (по границам Bounding Box и Pivot Point): вкл/выкл" hidden>
+		<svg class="svg-icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+		  <line x1="4" y1="1.5" x2="4" y2="16.5" stroke-dasharray="2 2"></line>
+		  <line x1="1.5" y1="13" x2="16.5" y2="13" stroke-dasharray="2 2"></line>
+		  <rect x="6" y="4.5" width="8.5" height="6.5" rx="1"></rect>
+		  <circle cx="4" cy="13" r="1.8" fill="currentColor" stroke="none"></circle>
+		</svg>
+	  </button>
 	  <button class="icon-btn stage-mode-only" id="btn-stage-add-obj" title="Добавить объект или декор в центр сцены" hidden>
 		<span class="material-icons">add_box</span>
 	  </button>
-	  <button class="icon-btn stage-mode-only" id="btn-stage-clip" title="Обрезать сцену по границам фрэйма экрана: вкл/выкл" hidden>
+	  <button class="icon-btn stage-mode-only" id="btn-stage-clip" title="Обрезать сцену по границам фрэйма 1366×768: вкл/выкл" hidden>
 		<span class="material-icons">crop</span>
 	  </button>
-	  <span class="stage-tool-note stage-mode-only" id="stage-ctrl-hint" hidden>Удерживайте <b>Ctrl + ЛКМ</b> (или тяните рамку) для перетаскивания объектов</span>
+	  <button class="icon-btn stage-mode-only" id="btn-stage-play-top" title="Предпросмотр сцены во весь вьюпорт (выход — ESC)" hidden>
+		<span class="material-icons">play_circle_filled</span>
+	  </button>
+	  <span class="stage-tool-note stage-mode-only" id="stage-ctrl-hint" hidden><b>Ctrl+ЛКМ</b> — перетащить · Потяните из линейки — направляющая</span>
 
 	  <span class="spacer"></span>
 	  <span class="stage-fps-badge stage-mode-only" id="stage-fps-badge" hidden>60 FPS</span>
@@ -170,9 +181,12 @@
 	  <button class="icon-btn obj-mode-only" id="btn-timeline-toggle" title="Свернуть / развернуть таймлайн">
 		<span class="material-icons" id="timeline-toggle-icon">expand_more</span>
 	  </button>
+	  <button class="icon-btn stage-mode-only" id="btn-stage-bar-toggle" title="Свернуть / развернуть нижнюю панель сцены" hidden>
+		<span class="material-icons" id="stage-bar-toggle-icon">expand_more</span>
+	  </button>
 	</div>
 
-		<div class="playback-row">
+		<div class="playback-row obj-mode-only" id="playback-bar">
 		  <button class="icon-btn" id="pb-first" title="В начало"><span class="material-icons">first_page</span></button>
 		  <button class="icon-btn" id="pb-prev"  title="Кадр назад"><span class="material-icons">skip_previous</span></button>
 		  <button class="icon-btn" id="pb-play"  title="Play / Pause"><span class="material-icons">play_arrow</span></button>
@@ -237,7 +251,7 @@
 		  </span>
 		</div>
 
-		<div class="timeline" id="timeline">
+		<div class="timeline obj-mode-only" id="timeline">
 		  <div class="tl-head-label">Таймлайн:</div>
 		  <div class="tl-head-ruler-wrap">
 			<div class="tl-head-ruler" id="tl-ruler">
@@ -255,15 +269,10 @@
 		</div>
 
 		<div class="stage-bar" id="stage-bar" hidden>
-		  <button class="stage-play-btn" id="stage-play-btn" type="button" title="Запустить / остановить живой предпросмотр всей сцены">
+		  <button class="stage-play-btn" id="stage-play-btn" type="button" title="Запустить предпросмотр фрэйма сцены во весь вьюпорт без элементов интерфейса (выход — ESC)">
 			<span class="material-icons" id="stage-play-icon">play_arrow</span>
-			<span id="stage-play-label">Предпросмотр</span>
+			<span id="stage-play-label">Предпросмотр (ESC — выход)</span>
 		  </button>
-		  <button class="icon-btn" id="stage-stop-btn" type="button" title="Остановить и сбросить время предпросмотра (00:00)">
-			<span class="material-icons">stop</span>
-		  </button>
-		  <span class="time-field time-field-cur" id="stage-tc">00:00:000</span>
-
 		  <label class="fps-wrap" title="Глобальная скорость предпросмотра сцены (10%..200%)">
 			<input type="range" id="stage-speed-slider" min="10" max="200" step="5" value="100">
 			<span class="fps-value" id="stage-speed-value">1.0×</span>
@@ -271,8 +280,8 @@
 
 		  <span class="sep"></span>
 
-		  <div class="stage-rubber-controls" title="Тест резинового растягивания экрана (проверка относительной привязки объектов)">
-			<span class="stage-rubber-title">Экран:</span>
+		  <div class="stage-rubber-controls" title="Тест адаптивного растягивания экрана игры (проверка относительной привязки объектов и направляющих)">
+			<span class="stage-rubber-title">Адаптив экрана:</span>
 			<label class="stage-rubber-axis">
 			  <span>W</span>
 			  <input type="range" id="stage-rubber-w" min="480" max="2560" step="2" value="1366">
@@ -282,7 +291,7 @@
 			  <input type="range" id="stage-rubber-h" min="360" max="1440" step="2" value="768">
 			</label>
 			<span class="stage-rubber-readout" id="stage-rubber-readout">1366 × 768 (100%)</span>
-			<button class="icon-btn icon-btn-sm" id="stage-rubber-reset" type="button" title="Вернуть опорный размер экрана">
+			<button class="icon-btn icon-btn-sm" id="stage-rubber-reset" type="button" title="Вернуть базовый размер фрэйма (1366×768)">
 			  <span class="material-icons">restart_alt</span>
 			</button>
 		  </div>
@@ -675,15 +684,15 @@
   </div>
   <div class="hint" id="hint"></div>
 
-  <script src="js/gizmo.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
-  <script src="js/api.js?v=4"></script>
-  <script src="js/scene.js?v=4"></script>
-  <script src="js/layers.js?v=4"></script>
-  <script src="js/animation.js?v=4"></script>
-  <script src="js/timeline.js?v=4"></script>
-  <script src="js/presets.js?v=4"></script>
-  <script src="js/stage.js?v=4"></script>
-  <script src="js/main.js?v=4"></script>
+  <script src="js/gizmo.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/scene.js?v=5"></script>
+  <script src="js/layers.js?v=5"></script>
+  <script src="js/animation.js?v=5"></script>
+  <script src="js/timeline.js?v=5"></script>
+  <script src="js/presets.js?v=5"></script>
+  <script src="js/stage.js?v=5"></script>
+  <script src="js/main.js?v=5"></script>
 </body>
 </html>

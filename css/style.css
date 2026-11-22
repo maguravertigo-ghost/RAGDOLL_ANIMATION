@@ -1819,3 +1819,245 @@ aside.right {
   border-radius: 5px;
   border: 2px solid #1d2025;
 }
+
+/* Строгое скрытие неактивных блоков по атрибуту [hidden] и по data-editor-mode */
+[hidden],
+.playback-row[hidden],
+.timeline[hidden],
+.stage-bar[hidden],
+.header-mode-bar[hidden],
+.modal[hidden],
+#stage-guides-svg[hidden],
+#stage-gizmo-svg[hidden],
+#gizmo-svg[hidden],
+.stage-ruler[hidden],
+.stage-ruler-corner[hidden] {
+  display: none !important;
+}
+
+body[data-editor-mode="stage"] .obj-mode-only,
+body[data-editor-mode="stage"] #playback-bar,
+body[data-editor-mode="stage"] #timeline {
+  display: none !important;
+}
+body[data-editor-mode="object"] .stage-mode-only,
+body[data-editor-mode="object"] #stage-bar,
+body[data-editor-mode="object"] #stage-guides-svg,
+body[data-editor-mode="object"] #stage-gizmo-svg,
+body[data-editor-mode="object"] .stage-ruler,
+body[data-editor-mode="object"] .stage-ruler-corner {
+  display: none !important;
+}
+
+/* Сворачивание нижней панели сцены по кнопке-стрелочке */
+.stage-bar.collapsed {
+  display: none !important;
+}
+
+/* Inkscape-линейки по краям вьюпорта и вытягиваемые направляющие */
+:root {
+  --stage-ruler-size: 20px;
+}
+
+.stage-ruler-corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--stage-ruler-size);
+  height: var(--stage-ruler-size);
+  background: #20242b;
+  border-right: 1px solid #353b45;
+  border-bottom: 1px solid #353b45;
+  color: #86909c;
+  font-size: 9px;
+  font-family: ui-monospace, Consolas, monospace;
+  display: grid;
+  place-items: center;
+  z-index: 8;
+  user-select: none;
+  cursor: pointer;
+}
+.stage-ruler-corner:hover {
+  color: #69db7c;
+  background: #272d36;
+}
+
+.stage-ruler {
+  position: absolute;
+  background: #1d2128;
+  z-index: 7;
+  user-select: none;
+  overflow: hidden;
+}
+.stage-ruler canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.stage-ruler-h {
+  top: 0;
+  left: var(--stage-ruler-size);
+  right: 0;
+  height: var(--stage-ruler-size);
+  border-bottom: 1px solid #353b45;
+  cursor: ns-resize;
+}
+.stage-ruler-v {
+  top: var(--stage-ruler-size);
+  left: 0;
+  bottom: 0;
+  width: var(--stage-ruler-size);
+  border-right: 1px solid #353b45;
+  cursor: ew-resize;
+}
+
+.stage-ruler-hair {
+  position: absolute;
+  background: #51cf66;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.stage-ruler-hair-x {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-100px);
+}
+.stage-ruler-hair-y {
+  left: 0;
+  right: 0;
+  height: 1px;
+  transform: translateY(-100px);
+}
+
+/* SVG-слой направляющих поверх сцены */
+#stage-guides-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+#stage-gizmo-svg {
+  z-index: 6;
+}
+.stage-guide-line {
+  stroke: #3bc9db;
+  stroke-width: 1px;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+.stage-guide-line.dragging {
+  stroke: #ffd43b;
+  stroke-width: 1.4px;
+  stroke-dasharray: none;
+}
+.stage-guide-line.active-snap {
+  stroke: #ff6b6b;
+  stroke-width: 1.6px;
+  stroke-dasharray: none;
+}
+.stage-guide-hit {
+  stroke: transparent;
+  stroke-width: 11px;
+  pointer-events: stroke;
+}
+.stage-guide-hit.guide-h {
+  cursor: ns-resize;
+}
+.stage-guide-hit.guide-v {
+  cursor: ew-resize;
+}
+.stage-guide-badge-bg {
+  fill: rgba(19, 23, 29, 0.92);
+  stroke: #3bc9db;
+  stroke-width: 1px;
+  rx: 3px;
+  pointer-events: none;
+}
+.stage-guide-badge-bg.dragging {
+  stroke: #ffd43b;
+}
+.stage-guide-badge-text {
+  fill: #e9ecef;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  pointer-events: none;
+}
+
+/* Сворачиваемые карточки в Свойствах (Бэкграунд свёрнут по умолчанию) */
+.stage-collapse-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.stage-collapse-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: none;
+  background: rgba(47, 158, 68, 0.10);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.stage-collapse-head:hover {
+  background: rgba(47, 158, 68, 0.18);
+}
+.stage-collapse-head .material-icons {
+  font-size: 16px;
+  color: #8ce99a;
+}
+.stage-collapse-summary {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+.stage-collapse-body {
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* Полноэкранный чистый Предпросмотр сцены во весь вьюпорт (выход по ESC) */
+body.stage-preview-fullscreen header,
+body.stage-preview-fullscreen .tools-row,
+body.stage-preview-fullscreen #playback-bar,
+body.stage-preview-fullscreen #timeline,
+body.stage-preview-fullscreen #stage-bar,
+body.stage-preview-fullscreen aside.right,
+body.stage-preview-fullscreen .stage-ruler,
+body.stage-preview-fullscreen .stage-ruler-corner,
+body.stage-preview-fullscreen #stage-guides-svg,
+body.stage-preview-fullscreen #stage-gizmo-svg,
+body.stage-preview-fullscreen #gizmo-svg,
+body.stage-preview-fullscreen #grid,
+body.stage-preview-fullscreen .stage-frame-border,
+body.stage-preview-fullscreen .stage-shadow-rect,
+body.stage-preview-fullscreen #hint {
+  display: none !important;
+}
+body.stage-preview-fullscreen {
+  background: #090b0f;
+}
+body.stage-preview-fullscreen main {
+  grid-template-columns: 1fr !important;
+  height: 100vh !important;
+}
+body.stage-preview-fullscreen section.center {
+  height: 100vh !important;
+}
+body.stage-preview-fullscreen .viewport {
+  background: #090b0f !important;
+}

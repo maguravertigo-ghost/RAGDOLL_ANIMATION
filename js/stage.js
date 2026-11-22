@@ -1,17 +1,17 @@
 'use strict';
 
 // ============================================================
-//  stage.js — Редактор сцены (v0.4.0):
-//    • Переключатель режимов (Малиновый: Анимация / Зелёный: Сцена)
-//    • Фон сцены (SVG + PNG/растр + сплошной прямоугольник 1366×768)
-//    • Слои сцены, пользовательские папки и Z-порядок отрисовки
-//    • Относительное резиновое позиционирование (anchor 0..1),
-//      исходный верхнеуровневый Pivot Point, Ctrl+Drag, Stage Gizmo,
-//      одиночный и групповой скейл
-//    • Быстрый 60 FPS предпросмотр всей сцены без пересоздания DOM
+//  stage.js — Редактор сцены (v0.5.0):
+//    • Два режима редактора (Малиновый: Анимация объектов / Зелёный: Сцена)
+//    • Скрытие ключевого таймлайна в режиме Сцены + сворачивание нижней панели
+//    • Встроенный слой «Бэкграунд» (свойства свёрнуты по умолчанию)
+//    • Фрэйм игры 1366×768 и чистый полноэкранный Предпросмотр без UI (выход по ESC)
+//    • Inkscape-линейки и вытягиваемые мышкой Направляющие (привязка к сетке +
+//      привязка объектов к направляющим по Bounding Box и единому Pivot Point)
+//    • Относительная резиновая привязка (0..1) + метаданные катсцен и интерактива
 // ============================================================
 
-// -------- 2D аффинная математика для точного расчёта границ и пивота --------
+// -------- 2D аффинная математика для точного расчёта границ и единого пивота --------
 
 function mat2dIdentity() {
   return [1, 0, 0, 1, 0, 0];
@@ -71,7 +71,7 @@ function mat2dFromRigPart(part, sz, tr) {
   return m;
 }
 
-// -------- нормализация модели сцены и метрики опорного экрана --------
+// -------- нормализация модели сцены, направляющих и метаданных игры --------
 
 function nextStageItemId(prefix) {
   const items = (App.stage.data && App.stage.data.items) || [];
@@ -81,10 +81,37 @@ function nextStageItemId(prefix) {
   return prefix + '_' + idx;
 }
 
+function nextStageGuideId() {
+  const guides = (App.stage.data && App.stage.data.guides) || [];
+  const used = new Set(guides.map(g => g.id));
+  let idx = 1;
+  while (used.has('guide_' + idx)) idx++;
+  return 'guide_' + idx;
+}
+
+function normalizeStageInteraction(raw, itemType) {
+  const src = (raw && typeof raw === 'object') ? raw : {};
+  const defaultRole = itemType === 'object' ? 'animated' : 'static';
+  const role = ['static', 'animated', 'interactive', 'scripted'].includes(src.role)
+    ? src.role
+    : defaultRole;
+  return {
+    role,
+    gameTag: typeof src.gameTag === 'string' ? src.gameTag : '',
+    clickable: !!src.clickable,
+    draggable: !!src.draggable,
+    onClickAnim: typeof src.onClickAnim === 'string' ? src.onClickAnim : '',
+    initialState: src.initialState === 'hidden' ? 'hidden' : 'visible'
+  };
+}
+
 function ensureStageStructure(stageObj, fallbackName) {
   const s = stageObj && typeof stageObj === 'object' ? stageObj : {};
-  s.version = 1;
+  s.version = 2;
   s.name = s.name || fallbackName || 'stage';
+  s.sceneKind = s.sceneKind === 'cutscene' ? 'cutscene' : 'gameplay';
+  if (!Array.isArray(s.cutscenes)) s.cutscenes = [];
+
   if (!s.frame || typeof s.frame !== 'object') {
     s.frame = { width: 1366, height: 768 };
   }
@@ -102,6 +129,16 @@ function ensureStageStructure(stageObj, fallbackName) {
   if (s.background.opacity === undefined) s.background.opacity = 1;
   if (s.background.visible === undefined) s.background.visible = true;
 
+  // Относительные направляющие сцены: axis ('v' | 'h'), pos (0..1 относительно ширины/высоты фрэйма)
+  if (!Array.isArray(s.guides)) s.guides = [];
+  s.guides = s.guides
+    .filter(g => g && (g.axis === 'v' || g.axis === 'h') && isFinite(g.pos))
+    .map((g, idx) => ({
+      id: g.id || ('guide_' + (idx + 1)),
+      axis: g.axis,
+      pos: Number(g.pos)
+    }));
+
   if (!Array.isArray(s.items)) s.items = [];
   for (let i = 0; i < s.items.length; i++) {
     const it = s.items[i];
@@ -111,6 +148,7 @@ function ensureStageStructure(stageObj, fallbackName) {
     if (it.visible === undefined) it.visible = true;
     if (it.opacity === undefined) it.opacity = 1;
     if (it.isGroup) continue;
+
     if (!it.type) it.type = it.objectName ? 'object' : 'asset';
     if (!it.anchor || typeof it.anchor !== 'object') {
       it.anchor = { x: 0.5, y: 0.5 };
@@ -128,37 +166,62 @@ function ensureStageStructure(stageObj, fallbackName) {
       it.scale.y = isFinite(it.scale.y) ? Number(it.scale.y) : 1;
     }
     it.rotation = isFinite(it.rotation) ? Number(it.rotation) : 0;
-    if (!it.pivotOffset || typeof it.pivotOffset !== 'object') {
-      it.pivotOffset = { x: 0, y: 0 };
-    } else {
-      it.pivotOffset.x = isFinite(it.pivotOffset.x) ? Number(it.pivotOffset.x) : 0;
-      it.pivotOffset.y = isFinite(it.pivotOffset.y) ? Number(it.pivotOffset.y) : 0;
-    }
+
+    // У каждого объекта на сцене строго ОДИН единый Pivot Point (исходный верхнеуровневый)
+    delete it.pivotOffset;
+
     if (it.type === 'object') {
       if (typeof it.animation !== 'string') it.animation = 'idle';
       if (it.loop === undefined) it.loop = true;
       it.speed = isFinite(it.speed) && it.speed > 0 ? Number(it.speed) : 1;
       it.phase = isFinite(it.phase) ? Number(it.phase) : 0;
     }
+    it.interaction = normalizeStageInteraction(it.interaction, it.type);
   }
   return s;
+}
+
+function syncStageRubberSlidersToBase() {
+  const st = App.stage.data;
+  const baseW = (st && st.frame && st.frame.width)  || 1366;
+  const baseH = (st && st.frame && st.frame.height) || 768;
+  App.stage.testWidth = null;
+  App.stage.testHeight = null;
+  if (els.stageRubberW) {
+    els.stageRubberW.min = String(Math.min(360, Math.round(baseW * 0.35)));
+    els.stageRubberW.max = String(Math.max(2560, Math.round(baseW * 2)));
+    els.stageRubberW.value = String(baseW);
+  }
+  if (els.stageRubberH) {
+    els.stageRubberH.min = String(Math.min(240, Math.round(baseH * 0.35)));
+    els.stageRubberH.max = String(Math.max(1440, Math.round(baseH * 2)));
+    els.stageRubberH.value = String(baseH);
+  }
 }
 
 function getStageFrameMetrics() {
   const st = App.stage.data;
   const baseW = (st && st.frame && st.frame.width)  || 1366;
   const baseH = (st && st.frame && st.frame.height) || 768;
-  const pctW = els.stageRubberW ? (parseFloat(els.stageRubberW.value) || 100) : 100;
-  const pctH = els.stageRubberH ? (parseFloat(els.stageRubberH.value) || 100) : 100;
-  const fw = Math.max(64, Math.round(baseW * (pctW / 100)));
-  const fh = Math.max(64, Math.round(baseH * (pctH / 100)));
+  let fw = baseW;
+  let fh = baseH;
+  if (!App.stage.previewFullscreen) {
+    if (isFinite(App.stage.testWidth) && App.stage.testWidth > 0) {
+      fw = Math.round(App.stage.testWidth);
+    }
+    if (isFinite(App.stage.testHeight) && App.stage.testHeight > 0) {
+      fh = Math.round(App.stage.testHeight);
+    }
+  }
+  fw = Math.max(64, fw);
+  fh = Math.max(64, fh);
   return {
     baseW,
     baseH,
     fw,
     fh,
-    pctW,
-    pctH,
+    pctW: (fw / baseW) * 100,
+    pctH: (fh / baseH) * 100,
     sxFrame: fw / baseW,
     syFrame: fh / baseH
   };
@@ -178,6 +241,18 @@ function worldToAnchor(wx, wy, metrics) {
     x: m.fw > 0 ? (wx / m.fw + 0.5) : 0.5,
     y: m.fh > 0 ? (wy / m.fh + 0.5) : 0.5
   };
+}
+
+function guideToWorldCoord(guide, metrics) {
+  const m = metrics || getStageFrameMetrics();
+  if (guide.axis === 'v') return (guide.pos - 0.5) * m.fw;
+  return (guide.pos - 0.5) * m.fh;
+}
+
+function worldCoordToGuidePos(axis, wCoord, metrics) {
+  const m = metrics || getStageFrameMetrics();
+  if (axis === 'v') return m.fw > 0 ? (wCoord / m.fw + 0.5) : 0.5;
+  return m.fh > 0 ? (wCoord / m.fh + 0.5) : 0.5;
 }
 
 function getResponsiveMultiplier(scaleMode, metrics) {
@@ -212,7 +287,7 @@ function isStageItemVisible(item) {
   return true;
 }
 
-// -------- компиляция шаблонов объектов и исходного верхнего Pivot Point --------
+// -------- компиляция шаблонов объектов и их единого верхнеуровневого Pivot Point --------
 
 function getSvgSizeFromRoot(svgEl) {
   if (!svgEl) return { w: 100, h: 100 };
@@ -250,7 +325,6 @@ function compileStageTemplate(name, settings, svgMap) {
     }
   }
 
-  // Вычисляем базовые трансформации каждой части и точные мировые границы в rig-координатах
   const baseTrMap = {};
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
@@ -304,10 +378,7 @@ function compileStageTemplate(name, settings, svgMap) {
     minX = -50; minY = -50; maxX = 50; maxY = 50;
   }
 
-  // Исходный верхнеуровневый Pivot Point объекта:
-  // Если в объекте один корневой узел верхнего уровня (например all_character, all_object, Group_1),
-  // его собственный пивот в rig-координатах находится строго в точке basePosition корня.
-  // Если корней несколько — используем clip.pivot от общего прямоугольника границ объекта.
+  // Единый верхнеуровневый Pivot Point объекта
   const roots = parts.filter(p => !p.parent || !byId[p.parent]);
   let rigPivot;
   if (roots.length === 1) {
@@ -332,7 +403,6 @@ function compileStageTemplate(name, settings, svgMap) {
     h: Math.max(4, (maxY - minY) * unitToPx)
   };
 
-  // Предкомпилируем базовые параметры частей и дорожки всех анимаций для 60 FPS без аллокаций
   const compiledParts = parts.map(p => {
     const sz = partSizes[p.id];
     const bt = baseTrMap[p.id];
@@ -513,7 +583,7 @@ function buildRigPartTransformStr(cp, px, py, rot, sx, sy, kx, ky) {
   return s;
 }
 
-// -------- построение и синхронизация SVG-сцены без пересборки --------
+// -------- построение и синхронизация SVG-сцены --------
 
 function ensureStageViewportSkeleton() {
   if (!els.stageRoot) return;
@@ -555,6 +625,7 @@ function ensureStageViewportSkeleton() {
 
   const borderRect = document.createElementNS(SVG_NS, 'rect');
   borderRect.setAttribute('class', 'stage-frame-border');
+  borderRect.setAttribute('vector-effect', 'non-scaling-stroke');
 
   els.stageRoot.appendChild(shadowRect);
   els.stageRoot.appendChild(bgGroup);
@@ -604,7 +675,8 @@ async function renderStageBackground() {
     App.stage._clipRectEl.setAttribute('width', String(m.fw));
     App.stage._clipRectEl.setAttribute('height', String(m.fh));
   }
-  if (App.stage.clipFrame) {
+  const clipNow = !!(App.stage.clipFrame || App.stage.previewFullscreen);
+  if (clipNow) {
     fd.contentClipWrap.setAttribute('clip-path', 'url(#stage-frame-clip)');
     fd.bgGroup.setAttribute('clip-path', 'url(#stage-frame-clip)');
   } else {
@@ -624,8 +696,10 @@ async function renderStageBackground() {
     els.stageResLabel.textContent = m.baseW + '×' + m.baseH;
   }
   if (els.stageRubberReadout) {
-    els.stageRubberReadout.textContent = m.fw + '×' + m.fh +
-      ' (' + Math.round(m.pctW) + '%×' + Math.round(m.pctH) + '%)';
+    const pctText = (Math.round(m.pctW) === 100 && Math.round(m.pctH) === 100)
+      ? '100%'
+      : (Math.round(m.pctW) + '%×' + Math.round(m.pctH) + '%');
+    els.stageRubberReadout.textContent = m.fw + ' × ' + m.fh + ' (' + pctText + ')';
   }
 
   if (!bg.file) {
@@ -667,12 +741,10 @@ async function renderStageBackground() {
       const natH = info.kind === 'svg'
         ? (info.parsed.height * (info.unitToPx || 1))
         : (info.height || m.fh);
-      const dw = natW * m.sxFrame;
-      const dh = natH * m.syFrame;
-      el.setAttribute('x', String(-dw / 2));
-      el.setAttribute('y', String(-dh / 2));
-      el.setAttribute('width', String(dw));
-      el.setAttribute('height', String(dh));
+      el.setAttribute('x', String(-natW / 2));
+      el.setAttribute('y', String(-natH / 2));
+      el.setAttribute('width', String(natW));
+      el.setAttribute('height', String(natH));
       el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     } else {
       el.setAttribute('x', String(x));
@@ -682,10 +754,7 @@ async function renderStageBackground() {
       el.setAttribute('preserveAspectRatio', getPreserveAspectRatioForFit(bg.fit));
     }
   } catch (e) {
-    console.warn('Stage: не удалось загрузить фон', bg.file, e);
-    fd.bgMediaSlot.innerHTML = '';
-    fd.renderedBgKey = '';
-    fd.bgMediaEl = null;
+    console.warn('Stage: ошибка загрузки фона', bg.file, e);
   }
 }
 
@@ -698,33 +767,31 @@ function buildObjectInstanceDom(item, tpl) {
   rigWrap.setAttribute('class', 'stage-rig-wrap');
   outerG.appendChild(rigWrap);
 
-  const partNodes = new Array(tpl.compiledParts.length);
+  const partNodes = [];
   const byIdNode = {};
-
   for (let i = 0; i < tpl.compiledParts.length; i++) {
     const cp = tpl.compiledParts[i];
     const g = document.createElementNS(SVG_NS, 'g');
-    const trStr = buildRigPartTransformStr(
+    if (cp.opacity !== 1) g.setAttribute('opacity', String(cp.opacity));
+    if (!cp.isGroup && cp.file && tpl.svgMap[cp.file]) {
+      const srcSvg = tpl.svgMap[cp.file];
+      const svgClone = (typeof cloneSvgForDom === 'function')
+        ? cloneSvgForDom(srcSvg)
+        : srcSvg.cloneNode(true);
+      g.appendChild(svgClone);
+    }
+    const baseTrStr = buildRigPartTransformStr(
       cp, cp.basePosX, cp.basePosY, cp.baseRot,
       cp.baseSclX, cp.baseSclY, cp.baseSkwX, cp.baseSkwY
     );
-    g.setAttribute('transform', trStr);
-    if (!cp.baseVis) g.style.display = 'none';
-    if (cp.opacity !== 1) g.style.opacity = String(cp.opacity);
-
-    if (!cp.isGroup && cp.file && tpl.svgMap[cp.file]) {
-      const inner = (typeof cloneSvgForDom === 'function')
-        ? cloneSvgForDom(tpl.svgMap[cp.file])
-        : tpl.svgMap[cp.file].cloneNode(true);
-      g.appendChild(inner);
-    }
-
-    partNodes[i] = {
-      el: g,
-      lastTr: trStr,
-      lastVis: cp.baseVis
-    };
+    g.setAttribute('transform', baseTrStr);
+    g.style.display = cp.baseVis ? '' : 'none';
     byIdNode[cp.id] = g;
+    partNodes.push({
+      el: g,
+      lastTr: baseTrStr,
+      lastVis: cp.baseVis
+    });
   }
 
   for (let i = 0; i < tpl.compiledParts.length; i++) {
@@ -799,7 +866,9 @@ function buildFolderDom(item) {
 function syncStageItemTransform(item, metrics) {
   const dom = App.stage.domItems[item.id];
   if (!dom || !dom.outerG) return;
-  const hid = (item.visible === false);
+  const hiddenInPreview = App.stage.previewFullscreen &&
+    item.interaction && item.interaction.initialState === 'hidden';
+  const hid = (item.visible === false) || hiddenInPreview;
   dom.outerG.style.display = hid ? 'none' : '';
   dom.outerG.style.opacity = String(clamp(Number(item.opacity ?? 1), 0, 1));
   if (item.isGroup) return;
@@ -807,13 +876,10 @@ function syncStageItemTransform(item, metrics) {
   const m = metrics || getStageFrameMetrics();
   const wpos = anchorToWorld(item.anchor, m);
   const eff = getItemEffectiveScale(item, m);
-  const pivOffX = (item.pivotOffset && item.pivotOffset.x) || 0;
-  const pivOffY = (item.pivotOffset && item.pivotOffset.y) || 0;
 
   let outerTr = 'translate(' + wpos.x + ' ' + wpos.y + ')';
   if (item.rotation) outerTr += ' rotate(' + item.rotation + ')';
   if (eff.x !== 1 || eff.y !== 1) outerTr += ' scale(' + eff.x + ' ' + eff.y + ')';
-  if (pivOffX || pivOffY) outerTr += ' translate(' + (-pivOffX) + ' ' + (-pivOffY) + ')';
   dom.outerG.setAttribute('transform', outerTr);
 
   if (dom.kind === 'object' && dom.rigWrap && dom.tpl) {
@@ -866,7 +932,6 @@ async function rebuildStageScene() {
   if (!App.stage.data) return;
 
   const items = App.stage.data.items;
-  // Параллельная предзагрузка уникальных шаблонов и ассетов сцены
   const uniqueObjs = Array.from(new Set(
     items.filter(it => !it.isGroup && it.type === 'object' && it.objectName).map(it => it.objectName)
   ));
@@ -906,10 +971,11 @@ async function rebuildStageScene() {
 
   syncStageDomOrder();
   updateStageSelSize();
+  renderStageRulersAndGuides();
   StageGizmo.render();
 }
 
-// -------- оценка поз анимации экземпляров (0 аллокаций в кадр) --------
+// -------- оценка поз анимации экземпляров (60 FPS, 0 аллокаций в кадр) --------
 
 function resetInstanceToBasePose(dom) {
   if (!dom || dom.kind !== 'object') return;
@@ -1019,21 +1085,25 @@ function evaluateStageAnimationsAtTime(globalTimeSec) {
   }
 }
 
-// -------- Live-предпросмотр всей сцены (Play / Stop / FPS) --------
+// -------- Полноэкранный Предпросмотр сцены 1366×768 без UI (выход по ESC) --------
 
 function updateStagePreviewUI() {
-  if (!els.stagePlay) return;
   const on = !!App.stage.playing;
-  els.stagePlay.classList.toggle('playing', on);
-  if (els.stagePlayIcon)  els.stagePlayIcon.textContent = on ? 'pause' : 'play_arrow';
-  if (els.stagePlayLabel) els.stagePlayLabel.textContent = on ? 'Пауза сцены' : 'Предпросмотр сцены';
-  if (els.stageFpsBadge)  els.stageFpsBadge.hidden = !on;
+  if (els.stagePlay) els.stagePlay.classList.toggle('playing', on);
+  if (els.stagePlayIcon) els.stagePlayIcon.textContent = on ? 'pause' : 'play_arrow';
+  if (els.stagePlayLabel) {
+    els.stagePlayLabel.textContent = on ? 'Идёт предпросмотр (ESC — выход)' : 'Предпросмотр (ESC — выход)';
+  }
+  if (els.stageFpsBadge) {
+    els.stageFpsBadge.hidden = !(on && !App.stage.previewFullscreen);
+  }
 }
 
-function startStagePreview() {
+function startStageAnimationLoop() {
   if (App.stage.playing) return;
   App.stage.playing = true;
   App.stage.lastTs = 0;
+  App.stage.time = 0;
   App.stage.fpsSamples = [];
   updateStagePreviewUI();
 
@@ -1043,7 +1113,7 @@ function startStagePreview() {
       const dtMs = ts - App.stage.lastTs;
       const dt = Math.min(0.1, Math.max(0, dtMs / 1000));
       App.stage.time += dt * (App.stage.speed || 1);
-      if (dtMs > 0 && els.stageFpsBadge) {
+      if (dtMs > 0 && els.stageFpsBadge && !App.stage.previewFullscreen) {
         const samples = App.stage.fpsSamples;
         samples.push(1000 / dtMs);
         if (samples.length > 20) samples.shift();
@@ -1062,22 +1132,86 @@ function startStagePreview() {
   App.stage.raf = requestAnimationFrame(tick);
 }
 
-function pauseStagePreview() {
+function stopStagePreview() {
   App.stage.playing = false;
   if (App.stage.raf) {
     cancelAnimationFrame(App.stage.raf);
     App.stage.raf = null;
   }
+  App.stage.time = 0;
+  evaluateStageAnimationsAtTime(0);
   updateStagePreviewUI();
 }
 
-function stopStagePreview() {
-  pauseStagePreview();
-  App.stage.time = 0;
-  evaluateStageAnimationsAtTime(0);
+function fitStagePreviewFullscreenCamera() {
+  if (!els.viewport) return;
+  const m = getStageFrameMetrics();
+  const W = Math.max(64, els.viewport.clientWidth || window.innerWidth || m.fw);
+  const H = Math.max(64, els.viewport.clientHeight || window.innerHeight || m.fh);
+  const z = Math.min(W / m.fw, H / m.fh);
+  App.camera.x = 0;
+  App.camera.y = 0;
+  App.camera.zoom = clamp(z, 0.05, 20);
+  applyCamera();
 }
 
-// -------- геометрические границы элементов сцены и групп --------
+function enterStageFullscreenPreview() {
+  if (App.editorMode !== 'stage' || !App.stage.data) return;
+  if (App.stage.previewFullscreen) return;
+
+  App.stage.savedCameraBeforePreview = clone(App.camera);
+  App.stage.previewFullscreen = true;
+  document.body.classList.add('stage-preview-fullscreen');
+  setHint('');
+
+  renderStageBackground();
+  syncAllStageTransforms();
+  fitStagePreviewFullscreenCamera();
+  startStageAnimationLoop();
+
+  if (document.documentElement && typeof document.documentElement.requestFullscreen === 'function') {
+    try {
+      const p = document.documentElement.requestFullscreen();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) {}
+  }
+
+  requestAnimationFrame(() => {
+    if (App.stage.previewFullscreen) fitStagePreviewFullscreenCamera();
+  });
+}
+
+function exitStageFullscreenPreview() {
+  if (!App.stage.previewFullscreen) {
+    stopStagePreview();
+    return;
+  }
+  App.stage.previewFullscreen = false;
+  document.body.classList.remove('stage-preview-fullscreen');
+  stopStagePreview();
+
+  if (typeof document !== 'undefined' && document.fullscreenElement &&
+      typeof document.exitFullscreen === 'function') {
+    try {
+      const p = document.exitFullscreen();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) {}
+  }
+
+  renderStageBackground();
+  syncAllStageTransforms();
+  if (App.stage.savedCameraBeforePreview) {
+    App.camera = clone(App.stage.savedCameraBeforePreview);
+    App.stage.savedCameraBeforePreview = null;
+  }
+  requestAnimationFrame(() => {
+    applyCamera();
+    renderStageRulersAndGuides();
+    StageGizmo.render();
+  });
+}
+
+// -------- геометрические границы элементов сцены и единого Pivot Point --------
 
 function getStageItemLocalBox(item) {
   const dom = App.stage.domItems[item.id];
@@ -1086,14 +1220,10 @@ function getStageItemLocalBox(item) {
   return { x: -50, y: -50, w: 100, h: 100 };
 }
 
-function getStageItemWorldPoint(item, lx, ly, metrics) {
-  const m = metrics || getStageFrameMetrics();
-  const wpos = anchorToWorld(item.anchor, m);
-  const eff = getItemEffectiveScale(item, m);
-  const pivOffX = (item.pivotOffset && item.pivotOffset.x) || 0;
-  const pivOffY = (item.pivotOffset && item.pivotOffset.y) || 0;
-  const sx = (lx - pivOffX) * eff.x;
-  const sy = (ly - pivOffY) * eff.y;
+function getStageItemWorldPointWithCenter(item, wpos, lx, ly, metrics) {
+  const eff = getItemEffectiveScale(item, metrics);
+  const sx = lx * eff.x;
+  const sy = ly * eff.y;
   const rad = (item.rotation || 0) * Math.PI / 180;
   const c = Math.cos(rad), s = Math.sin(rad);
   return {
@@ -1102,13 +1232,13 @@ function getStageItemWorldPoint(item, lx, ly, metrics) {
   };
 }
 
-function getStageItemWorldAABB(item, metrics) {
+function getStageItemWorldAABBAtPos(item, wpos, metrics) {
   const box = getStageItemLocalBox(item);
   const corners = [
-    getStageItemWorldPoint(item, box.x, box.y, metrics),
-    getStageItemWorldPoint(item, box.x + box.w, box.y, metrics),
-    getStageItemWorldPoint(item, box.x + box.w, box.y + box.h, metrics),
-    getStageItemWorldPoint(item, box.x, box.y + box.h, metrics)
+    getStageItemWorldPointWithCenter(item, wpos, box.x, box.y, metrics),
+    getStageItemWorldPointWithCenter(item, wpos, box.x + box.w, box.y, metrics),
+    getStageItemWorldPointWithCenter(item, wpos, box.x + box.w, box.y + box.h, metrics),
+    getStageItemWorldPointWithCenter(item, wpos, box.x, box.y + box.h, metrics)
   ];
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let i = 0; i < 4; i++) {
@@ -1118,6 +1248,12 @@ function getStageItemWorldAABB(item, metrics) {
     if (corners[i].y > maxY) maxY = corners[i].y;
   }
   return { minX, minY, maxX, maxY, corners };
+}
+
+function getStageItemWorldAABB(item, metrics) {
+  const m = metrics || getStageFrameMetrics();
+  const wpos = anchorToWorld(item.anchor, m);
+  return getStageItemWorldAABBAtPos(item, wpos, m);
 }
 
 function hitTestStageItemAtWorld(item, wx, wy, metrics) {
@@ -1132,10 +1268,8 @@ function hitTestStageItemAtWorld(item, wx, wy, metrics) {
   const c = Math.cos(rad), s = Math.sin(rad);
   const rx = dx * c - dy * s;
   const ry = dx * s + dy * c;
-  const pivOffX = (item.pivotOffset && item.pivotOffset.x) || 0;
-  const pivOffY = (item.pivotOffset && item.pivotOffset.y) || 0;
-  const lx = rx / eff.x + pivOffX;
-  const ly = ry / eff.y + pivOffY;
+  const lx = rx / eff.x;
+  const ly = ry / eff.y;
   const box = getStageItemLocalBox(item);
   return lx >= box.x && lx <= box.x + box.w && ly >= box.y && ly <= box.y + box.h;
 }
@@ -1144,7 +1278,6 @@ function findTopmostStageItemAtWorld(wx, wy) {
   if (!App.stage.data) return null;
   const metrics = getStageFrameMetrics();
   const ordered = getOrderedStageLeafItems();
-  // Поиск сверху вниз по Z-порядку (последний отрисованный — самый верхний)
   for (let i = ordered.length - 1; i >= 0; i--) {
     if (hitTestStageItemAtWorld(ordered[i], wx, wy, metrics)) {
       return ordered[i];
@@ -1153,7 +1286,6 @@ function findTopmostStageItemAtWorld(wx, wy) {
   return null;
 }
 
-// Возвращает все листовые элементы в точном порядке отрисовки дерева слоёв
 function getOrderedStageLeafItems() {
   if (!App.stage.data) return [];
   const { childrenOf, roots } = buildStageTreeIndex();
@@ -1169,7 +1301,6 @@ function getOrderedStageLeafItems() {
   return out;
 }
 
-// Возвращает активные листовые элементы для выделения (включая содержимое выделенных папок)
 function getSelectedTransformLeafItems() {
   if (!App.stage.data) return [];
   const items = App.stage.data.items;
@@ -1206,9 +1337,9 @@ function worldToViewportScreen(wx, wy) {
   };
 }
 
-function clientToStageWorld(clientX, clientY, allowSnap) {
+function clientToStageWorld(clientX, clientY, allowGridSnap) {
   let cx = clientX, cy = clientY;
-  if (allowSnap && App.grid.snap) {
+  if (allowGridSnap && App.grid.snap) {
     const sp = App.snapClientToGrid(clientX, clientY);
     cx = sp.x; cy = sp.y;
   }
@@ -1216,7 +1347,439 @@ function clientToStageWorld(clientX, clientY, allowSnap) {
   return screenToWorld(cx - rect.left, cy - rect.top);
 }
 
-// -------- StageGizmo: одиночный и групповой скейл / поворот / пивот / перемещение --------
+// -------- Inkscape-Линейки, Вытягиваемые Направляющие и Привязка --------
+
+const RULER_THICK = 20;
+let _guideDrag = null;
+
+function chooseRulerStep(zoom) {
+  const targetPx = 65;
+  const rawWorld = targetPx / Math.max(0.02, zoom || 1);
+  const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i] >= rawWorld) return steps[i];
+  }
+  return 2000;
+}
+
+function renderStageRulersCanvas(metrics) {
+  if (!els.viewport || !els.stageRulerH || !els.stageRulerV) return;
+  const show = (App.editorMode === 'stage') && !!App.stage.showRulers && !App.stage.previewFullscreen;
+  if (els.stageRulerCorner) els.stageRulerCorner.hidden = !show;
+  els.stageRulerH.hidden = !show;
+  els.stageRulerV.hidden = !show;
+  if (!show) return;
+
+  const vpW = els.viewport.clientWidth || 800;
+  const vpH = els.viewport.clientHeight || 500;
+  const z = App.camera.zoom || 1;
+  const cx = vpW / 2;
+  const cy = vpH / 2;
+  const m = metrics || getStageFrameMetrics();
+  const frameLeftWorld = -m.fw / 2;
+  const frameTopWorld  = -m.fh / 2;
+
+  const majorStep = chooseRulerStep(z);
+  const minorStep = majorStep / 5;
+  const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1;
+
+  // Горизонтальная линейка (координаты 0..fw от левого края фрэйма сцены)
+  const hCanvas = els.stageRulerHCanvas;
+  if (hCanvas && typeof hCanvas.getContext === 'function') {
+    const wPx = Math.max(1, vpW - RULER_THICK);
+    const hPx = RULER_THICK;
+    if (hCanvas.width !== Math.round(wPx * dpr) || hCanvas.height !== Math.round(hPx * dpr)) {
+      hCanvas.width = Math.round(wPx * dpr);
+      hCanvas.height = Math.round(hPx * dpr);
+    }
+    const ctx = hCanvas.getContext('2d');
+    if (ctx) {
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, wPx, hPx);
+
+      // Подсветка диапазона самого фрэйма 0..fw
+      const xFrame0 = (frameLeftWorld - App.camera.x) * z + cx - RULER_THICK;
+      const xFrame1 = (frameLeftWorld + m.fw - App.camera.x) * z + cx - RULER_THICK;
+      ctx.fillStyle = 'rgba(81, 207, 102, 0.08)';
+      ctx.fillRect(Math.max(0, xFrame0), 0, Math.max(0, Math.min(wPx, xFrame1) - Math.max(0, xFrame0)), hPx);
+
+      const worldMin = (RULER_THICK - cx) / z + App.camera.x;
+      const worldMax = (vpW - cx) / z + App.camera.x;
+      const fMin = worldMin - frameLeftWorld;
+      const fMax = worldMax - frameLeftWorld;
+      const firstMinor = Math.floor(fMin / minorStep) * minorStep;
+
+      ctx.strokeStyle = '#5c6470';
+      ctx.fillStyle = '#adb5bd';
+      ctx.font = '9px ui-monospace, Consolas, monospace';
+      ctx.textBaseline = 'top';
+      ctx.beginPath();
+      for (let fv = firstMinor; fv <= fMax + minorStep * 0.5; fv += minorStep) {
+        const wx = frameLeftWorld + fv;
+        const sx = (wx - App.camera.x) * z + cx - RULER_THICK;
+        if (sx < -2 || sx > wPx + 2) continue;
+        const isMajor = Math.abs(fv / majorStep - Math.round(fv / majorStep)) < 1e-3;
+        const tickLen = isMajor ? 11 : 5;
+        const xSnap = Math.round(sx) + 0.5;
+        ctx.moveTo(xSnap, hPx);
+        ctx.lineTo(xSnap, hPx - tickLen);
+        if (isMajor) {
+          ctx.fillText(String(Math.round(fv)), xSnap + 2, 2);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Вертикальная линейка (координаты 0..fh от верхнего края фрэйма сцены)
+  const vCanvas = els.stageRulerVCanvas;
+  if (vCanvas && typeof vCanvas.getContext === 'function') {
+    const wPx = RULER_THICK;
+    const hPx = Math.max(1, vpH - RULER_THICK);
+    if (vCanvas.width !== Math.round(wPx * dpr) || vCanvas.height !== Math.round(hPx * dpr)) {
+      vCanvas.width = Math.round(wPx * dpr);
+      vCanvas.height = Math.round(hPx * dpr);
+    }
+    const ctx = vCanvas.getContext('2d');
+    if (ctx) {
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, wPx, hPx);
+
+      const yFrame0 = (frameTopWorld - App.camera.y) * z + cy - RULER_THICK;
+      const yFrame1 = (frameTopWorld + m.fh - App.camera.y) * z + cy - RULER_THICK;
+      ctx.fillStyle = 'rgba(81, 207, 102, 0.08)';
+      ctx.fillRect(0, Math.max(0, yFrame0), wPx, Math.max(0, Math.min(hPx, yFrame1) - Math.max(0, yFrame0)));
+
+      const worldMin = (RULER_THICK - cy) / z + App.camera.y;
+      const worldMax = (vpH - cy) / z + App.camera.y;
+      const fMin = worldMin - frameTopWorld;
+      const fMax = worldMax - frameTopWorld;
+      const firstMinor = Math.floor(fMin / minorStep) * minorStep;
+
+      ctx.strokeStyle = '#5c6470';
+      ctx.fillStyle = '#adb5bd';
+      ctx.font = '9px ui-monospace, Consolas, monospace';
+      ctx.beginPath();
+      for (let fv = firstMinor; fv <= fMax + minorStep * 0.5; fv += minorStep) {
+        const wy = frameTopWorld + fv;
+        const sy = (wy - App.camera.y) * z + cy - RULER_THICK;
+        if (sy < -2 || sy > hPx + 2) continue;
+        const isMajor = Math.abs(fv / majorStep - Math.round(fv / majorStep)) < 1e-3;
+        const tickLen = isMajor ? 11 : 5;
+        const ySnap = Math.round(sy) + 0.5;
+        ctx.moveTo(wPx, ySnap);
+        ctx.lineTo(wPx - tickLen, ySnap);
+        if (isMajor) {
+          ctx.save();
+          ctx.translate(2, ySnap - 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textBaseline = 'top';
+          ctx.fillText(String(Math.round(fv)), 0, 0);
+          ctx.restore();
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+function renderStageGuidesOverlay(metrics) {
+  const svg = els.stageGuidesSvg;
+  if (!svg) return;
+  svg.innerHTML = '';
+  const show = (App.editorMode === 'stage') && !!App.stage.showRulers &&
+    !App.stage.previewFullscreen && !!App.stage.data;
+  svg.hidden = !show;
+  if (!show) return;
+
+  const vpW = els.viewport.clientWidth || 800;
+  const vpH = els.viewport.clientHeight || 500;
+  const m = metrics || getStageFrameMetrics();
+  const guides = App.stage.data.guides || [];
+  const activeSnapSet = new Set(App.stage.activeSnapGuides || []);
+
+  for (let i = 0; i < guides.length; i++) {
+    const g = guides[i];
+    const wCoord = guideToWorldCoord(g, m);
+    const scr = worldToViewportScreen(
+      g.axis === 'v' ? wCoord : 0,
+      g.axis === 'h' ? wCoord : 0
+    );
+    const isDragging = _guideDrag && _guideDrag.guide && _guideDrag.guide.id === g.id;
+    const isSnapped  = activeSnapSet.has(g.id);
+
+    const line = document.createElementNS(SVG_NS, 'line');
+    const hit  = document.createElementNS(SVG_NS, 'line');
+    const cls = 'stage-guide-line' +
+      (isDragging ? ' dragging' : '') +
+      (isSnapped ? ' active-snap' : '');
+    line.setAttribute('class', cls);
+    hit.setAttribute('class', 'stage-guide-hit ' + (g.axis === 'v' ? 'guide-v' : 'guide-h'));
+    hit.dataset.guideId = g.id;
+
+    if (g.axis === 'v') {
+      const x = Math.round(scr.x) + 0.5;
+      line.setAttribute('x1', String(x));
+      line.setAttribute('y1', '0');
+      line.setAttribute('x2', String(x));
+      line.setAttribute('y2', String(vpH));
+      hit.setAttribute('x1', String(x));
+      hit.setAttribute('y1', String(RULER_THICK));
+      hit.setAttribute('x2', String(x));
+      hit.setAttribute('y2', String(vpH));
+    } else {
+      const y = Math.round(scr.y) + 0.5;
+      line.setAttribute('x1', '0');
+      line.setAttribute('y1', String(y));
+      line.setAttribute('x2', String(vpW));
+      line.setAttribute('y2', String(y));
+      hit.setAttribute('x1', String(RULER_THICK));
+      hit.setAttribute('y1', String(y));
+      hit.setAttribute('x2', String(vpW));
+      hit.setAttribute('y2', String(y));
+    }
+
+    svg.appendChild(line);
+    svg.appendChild(hit);
+
+    if (isDragging) {
+      const pxFromEdge = g.axis === 'v' ? (wCoord + m.fw / 2) : (wCoord + m.fh / 2);
+      const label = (g.axis === 'v' ? 'X: ' : 'Y: ') +
+        Math.round(pxFromEdge) + ' px (' + (g.pos * 100).toFixed(1) + '%)';
+      const bx = g.axis === 'v' ? clamp(scr.x + 8, 28, vpW - 148) : 28;
+      const by = g.axis === 'h' ? clamp(scr.y - 24, 24, vpH - 28) : 26;
+      const bgRect = document.createElementNS(SVG_NS, 'rect');
+      bgRect.setAttribute('class', 'stage-guide-badge-bg dragging');
+      bgRect.setAttribute('x', String(bx));
+      bgRect.setAttribute('y', String(by));
+      bgRect.setAttribute('width', '138');
+      bgRect.setAttribute('height', '18');
+      const txt = document.createElementNS(SVG_NS, 'text');
+      txt.setAttribute('class', 'stage-guide-badge-text');
+      txt.setAttribute('x', String(bx + 6));
+      txt.setAttribute('y', String(by + 12));
+      txt.textContent = label;
+      svg.appendChild(bgRect);
+      svg.appendChild(txt);
+    }
+  }
+}
+
+function renderStageRulersAndGuides() {
+  const m = getStageFrameMetrics();
+  renderStageRulersCanvas(m);
+  renderStageGuidesOverlay(m);
+}
+
+// Вычисляет смещение привязки к направляющим (по границе Bounding Box ИЛИ по единому Pivot Point)
+function computeGuideSnapAdjustment(snapshots, dwx, dwy, metrics) {
+  App.stage.activeSnapGuides = [];
+  if (!App.stage.guideSnap || !App.stage.showRulers || !App.stage.data) {
+    return { dwx, dwy, snappedX: false, snappedY: false };
+  }
+  const guides = App.stage.data.guides || [];
+  if (!guides.length || !snapshots.length) {
+    return { dwx, dwy, snappedX: false, snappedY: false };
+  }
+
+  let candMinX = Infinity, candMinY = Infinity, candMaxX = -Infinity, candMaxY = -Infinity;
+  for (let i = 0; i < snapshots.length; i++) {
+    const snap = snapshots[i];
+    const candPos = { x: snap.wpos0.x + dwx, y: snap.wpos0.y + dwy };
+    const b = getStageItemWorldAABBAtPos(snap.item, candPos, metrics);
+    if (b.minX < candMinX) candMinX = b.minX;
+    if (b.minY < candMinY) candMinY = b.minY;
+    if (b.maxX > candMaxX) candMaxX = b.maxX;
+    if (b.maxY > candMaxY) candMaxY = b.maxY;
+  }
+
+  // Точки привязки по X и Y: границы Bounding Box (лево/право, верх/низ) И единый Pivot Point
+  const xPoints = [candMinX, candMaxX];
+  const yPoints = [candMinY, candMaxY];
+  if (snapshots.length === 1) {
+    xPoints.unshift(snapshots[0].wpos0.x + dwx);
+    yPoints.unshift(snapshots[0].wpos0.y + dwy);
+  } else {
+    xPoints.unshift((candMinX + candMaxX) / 2);
+    yPoints.unshift((candMinY + candMaxY) / 2);
+  }
+
+  const threshWorld = 9 / Math.max(0.05, App.camera.zoom || 1);
+  let bestDx = null, bestAbsX = threshWorld, bestGuideX = null;
+  let bestDy = null, bestAbsY = threshWorld, bestGuideY = null;
+
+  for (let i = 0; i < guides.length; i++) {
+    const g = guides[i];
+    const gw = guideToWorldCoord(g, metrics);
+    if (g.axis === 'v') {
+      for (let k = 0; k < xPoints.length; k++) {
+        const diff = gw - xPoints[k];
+        const ad = Math.abs(diff);
+        if (ad <= bestAbsX) {
+          bestAbsX = ad;
+          bestDx = diff;
+          bestGuideX = g.id;
+        }
+      }
+    } else {
+      for (let k = 0; k < yPoints.length; k++) {
+        const diff = gw - yPoints[k];
+        const ad = Math.abs(diff);
+        if (ad <= bestAbsY) {
+          bestAbsY = ad;
+          bestDy = diff;
+          bestGuideY = g.id;
+        }
+      }
+    }
+  }
+
+  let outDwx = dwx, outDwy = dwy;
+  if (bestDx !== null) {
+    outDwx += bestDx;
+    App.stage.activeSnapGuides.push(bestGuideX);
+  }
+  if (bestDy !== null) {
+    outDwy += bestDy;
+    App.stage.activeSnapGuides.push(bestGuideY);
+  }
+  return {
+    dwx: outDwx,
+    dwy: outDwy,
+    snappedX: bestDx !== null,
+    snappedY: bestDy !== null
+  };
+}
+
+function startGuideDragFromRuler(axis, e) {
+  if (App.editorMode !== 'stage' || !App.stage.data || e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const m = getStageFrameMetrics();
+  const w = clientToStageWorld(e.clientX, e.clientY, false);
+  let wCoord = (axis === 'v') ? w.x : w.y;
+  if (App.grid.snap) {
+    const step = App.grid.step || 4;
+    wCoord = Math.round(wCoord / step) * step;
+  }
+  const guide = {
+    id: nextStageGuideId(),
+    axis,
+    pos: worldCoordToGuidePos(axis, wCoord, m)
+  };
+  App.stage.data.guides.push(guide);
+  _guideDrag = { guide, isNew: true };
+  renderStageGuidesOverlay(m);
+}
+
+function setupStageRulersAndGuidesInteraction() {
+  if (els.stageRulerH) {
+    els.stageRulerH.addEventListener('mousedown', (e) => startGuideDragFromRuler('h', e));
+  }
+  if (els.stageRulerV) {
+    els.stageRulerV.addEventListener('mousedown', (e) => startGuideDragFromRuler('v', e));
+  }
+  if (els.stageRulerCorner) {
+    els.stageRulerCorner.addEventListener('dblclick', () => {
+      if (!App.stage.data || !App.stage.data.guides.length) return;
+      App.stage.data.guides = [];
+      markStageDirty();
+      renderStageGuidesOverlay();
+      if (App.stage.selectedId === '__bg__') renderStageProperties();
+      setHint('Все направляющие сцены очищены', 1600);
+    });
+  }
+
+  if (els.stageGuidesSvg) {
+    els.stageGuidesSvg.addEventListener('mousedown', (e) => {
+      if (App.editorMode !== 'stage' || !App.stage.data || e.button !== 0) return;
+      const hit = e.target && e.target.closest ? e.target.closest('[data-guide-id]') : null;
+      if (!hit) return;
+      const g = App.stage.data.guides.find(x => x.id === hit.dataset.guideId);
+      if (!g) return;
+      e.preventDefault();
+      e.stopPropagation();
+      _guideDrag = { guide: g, isNew: false };
+      renderStageGuidesOverlay();
+    });
+
+    els.stageGuidesSvg.addEventListener('dblclick', (e) => {
+      if (App.editorMode !== 'stage' || !App.stage.data) return;
+      const hit = e.target && e.target.closest ? e.target.closest('[data-guide-id]') : null;
+      if (!hit) return;
+      e.preventDefault();
+      e.stopPropagation();
+      App.stage.data.guides = App.stage.data.guides.filter(x => x.id !== hit.dataset.guideId);
+      markStageDirty();
+      renderStageGuidesOverlay();
+      if (App.stage.selectedId === '__bg__') renderStageProperties();
+      setHint('Направляющая удалена', 1400);
+    });
+  }
+
+  window.addEventListener('mousemove', (e) => {
+    if (App.editorMode === 'stage' && App.stage.showRulers && !App.stage.previewFullscreen && els.viewport) {
+      const rect = els.viewport.getBoundingClientRect();
+      const sx = e.clientX - rect.left - RULER_THICK;
+      const sy = e.clientY - rect.top - RULER_THICK;
+      if (els.stageRulerHairX) {
+        els.stageRulerHairX.style.transform = (sx >= 0 && sx <= rect.width)
+          ? ('translateX(' + Math.round(sx) + 'px)')
+          : 'translateX(-100px)';
+      }
+      if (els.stageRulerHairY) {
+        els.stageRulerHairY.style.transform = (sy >= 0 && sy <= rect.height)
+          ? ('translateY(' + Math.round(sy) + 'px)')
+          : 'translateY(-100px)';
+      }
+    }
+
+    if (!_guideDrag || !App.stage.data) return;
+    const m = getStageFrameMetrics();
+    const w = clientToStageWorld(e.clientX, e.clientY, false);
+    let wCoord = (_guideDrag.guide.axis === 'v') ? w.x : w.y;
+    // Привязка самой направляющей к сетке при активной кнопке привязки к сетке
+    if (App.grid.snap) {
+      const step = App.grid.step || 4;
+      wCoord = Math.round(wCoord / step) * step;
+    }
+    _guideDrag.guide.pos = Math.round(worldCoordToGuidePos(_guideDrag.guide.axis, wCoord, m) * 100000) / 100000;
+    renderStageGuidesOverlay(m);
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!_guideDrag) return;
+    const d = _guideDrag;
+    _guideDrag = null;
+    if (!App.stage.data || !els.viewport) return;
+
+    const rect = els.viewport.getBoundingClientRect();
+    const localX = e.clientX - rect.left;
+    const localY = e.clientY - rect.top;
+    const droppedBackOnRuler =
+      (d.guide.axis === 'h' && localY <= RULER_THICK) ||
+      (d.guide.axis === 'v' && localX <= RULER_THICK) ||
+      localX < 0 || localY < 0 || localX > rect.width || localY > rect.height;
+
+    if (droppedBackOnRuler) {
+      App.stage.data.guides = App.stage.data.guides.filter(x => x.id !== d.guide.id);
+      if (!d.isNew) {
+        markStageDirty();
+        setHint('Направляющая убрана обратно в линейку', 1500);
+      }
+    } else {
+      markStageDirty();
+    }
+    renderStageGuidesOverlay();
+    if (App.stage.selectedId === '__bg__') renderStageProperties();
+  });
+}
+
+// -------- StageGizmo: одиночный и групповой скейл / поворот / перемещение --------
 
 const StageGizmo = (function () {
   const HSIZE = 8;
@@ -1234,9 +1797,8 @@ const StageGizmo = (function () {
     const svg = els.stageGizmoSvg;
     if (!svg) return;
     svg.innerHTML = '';
-    if (App.editorMode !== 'stage' || !App.stage.data) return;
+    if (App.editorMode !== 'stage' || !App.stage.data || App.stage.previewFullscreen) return;
 
-    // Рамка выделения мышью (marquee)
     if (drag && drag.kind === 'marquee') {
       const x = Math.min(drag.sx0, drag.sx1);
       const y = Math.min(drag.sy0, drag.sy1);
@@ -1253,7 +1815,7 @@ const StageGizmo = (function () {
 
     const metrics = getStageFrameMetrics();
 
-    // ОДИНОЧНЫЙ ЭЛЕМЕНТ: ориентированная рамка + исходный верхнеуровневый Pivot Point + ручки скейла и поворота
+    // ОДИНОЧНЫЙ ЭЛЕМЕНТ: ориентированная рамка + единый верхнеуровневый Pivot Point + ручки скейла и поворота
     if (leaves.length === 1 && !(App.stage.selectedId && isStageFolderId(App.stage.selectedId))) {
       const it = leaves[0];
       if (!isStageItemVisible(it)) return;
@@ -1272,7 +1834,6 @@ const StageGizmo = (function () {
       box.dataset.gizmo = 'move';
       svg.appendChild(box);
 
-      // Точка поворота сверху над гранью 0-1
       const topMidX = (pts[0].x + pts[1].x) / 2;
       const topMidY = (pts[0].y + pts[1].y) / 2;
       const edgeDx = pts[1].x - pts[0].x;
@@ -1293,7 +1854,6 @@ const StageGizmo = (function () {
       rotHandle.dataset.gizmo = 'rotate';
       svg.appendChild(rotHandle);
 
-      // 4 угловые ручки скейла (масштабируют вокруг верхнеуровневого Pivot Point)
       for (let i = 0; i < 4; i++) {
         const h = makeSvg('rect', {
           x: pts[i].x - HSIZE / 2,
@@ -1307,7 +1867,6 @@ const StageGizmo = (function () {
         svg.appendChild(h);
       }
 
-      // 4 боковые ручки скейла по осям X / Y
       const edges = [
         { name: 'top',    a: 0, b: 1 },
         { name: 'right',  a: 1, b: 2 },
@@ -1329,11 +1888,11 @@ const StageGizmo = (function () {
         svg.appendChild(eh);
       }
 
-      // Прицел верхнеуровневого Pivot Point объекта
+      // Маркер ЕДИНОГО Pivot Point объекта (перетаскивание перемещает сам объект за его пивот)
       const wpos = anchorToWorld(it.anchor, metrics);
       const pScr = worldToViewportScreen(wpos.x, wpos.y);
       const pivG = makeSvg('g', { class: 'stage-gizmo-pivot' });
-      pivG.dataset.gizmo = 'pivot';
+      pivG.dataset.gizmo = 'move';
       pivG.appendChild(makeSvg('circle', {
         cx: pScr.x, cy: pScr.y, r: 6.5,
         fill: 'rgba(15, 20, 26, 0.78)', stroke: '#ffd43b', 'stroke-width': 1.6
@@ -1350,7 +1909,7 @@ const StageGizmo = (function () {
       return;
     }
 
-    // ГРУППОВОЕ ВЫДЕЛЕНИЕ (папка или несколько объектов): общая рамка и групповой скейл
+    // ГРУППОВОЕ ВЫДЕЛЕНИЕ (папка или несколько объектов)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     let visCount = 0;
     for (const it of leaves) {
@@ -1415,7 +1974,6 @@ const StageGizmo = (function () {
       svg.appendChild(h);
     }
 
-    // Центр трансформации группы
     const cx = gx + gw / 2, cy = gy + gh / 2;
     svg.appendChild(makeSvg('circle', {
       cx, cy, r: 5.5, fill: 'rgba(15,20,26,0.8)', stroke: '#ffd43b', 'stroke-width': 1.5
@@ -1452,12 +2010,36 @@ const StageGizmo = (function () {
     };
   }
 
+  function applyMoveDelta(dwxRaw, dwyRaw, metrics) {
+    if (!drag || drag.kind !== 'move') return;
+    let dwx = dwxRaw;
+    let dwy = dwyRaw;
+
+    // 1) Привязка к направляющим по границам Bounding Box ИЛИ единому Pivot Point
+    const gSnap = computeGuideSnapAdjustment(drag.snapshots, dwx, dwy, metrics);
+    dwx = gSnap.dwx;
+    dwy = gSnap.dwy;
+
+    // 2) Привязка к сетке по не привязанным к направляющим осям (если включён #btn-snap)
+    for (const snap of drag.snapshots) {
+      let nx = snap.wpos0.x + dwx;
+      let ny = snap.wpos0.y + dwy;
+      if (App.grid.snap && drag.snapshots.length === 1) {
+        const step = App.grid.step || 4;
+        if (!gSnap.snappedX) nx = Math.round(nx / step) * step;
+        if (!gSnap.snappedY) ny = Math.round(ny / step) * step;
+      }
+      snap.item.anchor = worldToAnchor(nx, ny, metrics);
+      syncStageItemTransform(snap.item, metrics);
+    }
+    renderStageGuidesOverlay(metrics);
+  }
+
   function onGizmoMouseDown(e) {
-    if (App.editorMode !== 'stage' || e.button !== 0 || App.spaceDown) return;
+    if (App.editorMode !== 'stage' || e.button !== 0 || App.spaceDown || App.stage.previewFullscreen) return;
     const target = e.target && e.target.closest ? e.target.closest('[data-gizmo]') : null;
     if (!target) return;
 
-    // Если зажат Ctrl на интерьере Gizmo — проверяем, не кликнули ли по другому объекту под курсором
     const gizmoKind = target.dataset.gizmo;
     if ((e.ctrlKey || e.metaKey) && (gizmoKind === 'move' || gizmoKind === 'group-move')) {
       handleStageViewportMouseDown(e, true);
@@ -1487,19 +2069,6 @@ const StageGizmo = (function () {
         piv,
         a0,
         rot0: it.rotation || 0,
-        moved: false
-      };
-      return;
-    }
-
-    if (gizmoKind === 'pivot' && leaves.length === 1) {
-      const it = leaves[0];
-      drag = {
-        kind: 'pivot',
-        item: it,
-        w0: wStart,
-        anchor0: clone(it.anchor),
-        pivOff0: clone(it.pivotOffset || { x: 0, y: 0 }),
         moved: false
       };
       return;
@@ -1582,20 +2151,8 @@ const StageGizmo = (function () {
         return;
       }
       drag.moved = true;
-      const wCur = clientToStageWorld(e.clientX, e.clientY, true);
-      const dwx = wCur.x - drag.w0.x;
-      const dwy = wCur.y - drag.w0.y;
-      for (const snap of drag.snapshots) {
-        let nx = snap.wpos0.x + dwx;
-        let ny = snap.wpos0.y + dwy;
-        if (App.grid.snap && drag.snapshots.length === 1) {
-          const step = App.grid.step || 4;
-          nx = Math.round(nx / step) * step;
-          ny = Math.round(ny / step) * step;
-        }
-        snap.item.anchor = worldToAnchor(nx, ny, metrics);
-        syncStageItemTransform(snap.item, metrics);
-      }
+      const wCur = clientToStageWorld(e.clientX, e.clientY, false);
+      applyMoveDelta(wCur.x - drag.w0.x, wCur.y - drag.w0.y, metrics);
       markStageDirty();
       updateStageSelSize();
       syncStageInspectorLive();
@@ -1617,29 +2174,6 @@ const StageGizmo = (function () {
       return;
     }
 
-    if (drag.kind === 'pivot') {
-      drag.moved = true;
-      const wCur = clientToStageWorld(e.clientX, e.clientY, true);
-      const eff = getItemEffectiveScale(drag.item, metrics);
-      const rad = -(drag.item.rotation || 0) * Math.PI / 180;
-      const c = Math.cos(rad), s = Math.sin(rad);
-      const dwx = wCur.x - drag.w0.x;
-      const dwy = wCur.y - drag.w0.y;
-      const dlx = (dwx * c - dwy * s) / (eff.x || 1);
-      const dly = (dwx * s + dwy * c) / (eff.y || 1);
-      drag.item.pivotOffset = {
-        x: drag.pivOff0.x + dlx,
-        y: drag.pivOff0.y + dly
-      };
-      const newWorld = anchorToWorld(drag.anchor0, metrics);
-      drag.item.anchor = worldToAnchor(newWorld.x + dwx, newWorld.y + dwy, metrics);
-      syncStageItemTransform(drag.item, metrics);
-      markStageDirty();
-      syncStageInspectorLive();
-      render();
-      return;
-    }
-
     if (drag.kind === 'scale-corner' || drag.kind === 'scale-edge') {
       drag.moved = true;
       const wCur = clientToStageWorld(e.clientX, e.clientY, false);
@@ -1649,13 +2183,11 @@ const StageGizmo = (function () {
 
       if (drag.kind === 'scale-corner') {
         if (e.shiftKey) {
-          // С зажатым Shift на углу — свободный непропорциональный скейл X/Y
           const fx = clamp(lx / drag.lx0, -50, 50);
           const fy = clamp(ly / drag.ly0, -50, 50);
           drag.item.scale.x = roundScaleVal(drag.scale0.x * fx);
           drag.item.scale.y = roundScaleVal(drag.scale0.y * fy);
         } else {
-          // По умолчанию угловая ручка масштабирует пропорционально вокруг пивота
           const dist = Math.hypot(lx, ly);
           const sign = (lx * drag.lx0 + ly * drag.ly0) < 0 ? -1 : 1;
           const f = clamp((dist / drag.dist0) * sign, -50, 50);
@@ -1719,6 +2251,11 @@ const StageGizmo = (function () {
     if (!drag) return;
     const d = drag;
     drag = null;
+
+    if (App.stage.activeSnapGuides && App.stage.activeSnapGuides.length) {
+      App.stage.activeSnapGuides = [];
+      renderStageGuidesOverlay();
+    }
 
     if (d.kind === 'marquee') {
       if (d.moved && App.stage.data) {
@@ -1789,9 +2326,14 @@ function isStageFolderId(id) {
 // -------- обработка кликов и Ctrl+Drag на вьюпорте сцены --------
 
 function handleStageViewportMouseDown(e, fromGizmoInterior) {
-  if (App.editorMode !== 'stage' || !App.stage.data) return;
-  if (!fromGizmoInterior && e.target && e.target.closest && e.target.closest('#stage-gizmo-svg')) {
-    return;
+  if (App.editorMode !== 'stage' || !App.stage.data || App.stage.previewFullscreen) return;
+  if (!fromGizmoInterior && e.target && e.target.closest) {
+    if (e.target.closest('#stage-gizmo-svg') ||
+        e.target.closest('#stage-guides-svg') ||
+        e.target.closest('.stage-ruler') ||
+        e.target.closest('.stage-ruler-corner')) {
+      return;
+    }
   }
 
   const metrics = getStageFrameMetrics();
@@ -1800,9 +2342,6 @@ function handleStageViewportMouseDown(e, fromGizmoInterior) {
   const hitSelected = currentSelectedLeaves.find(it => hitTestStageItemAtWorld(it, wClick.x, wClick.y, metrics)) || null;
   const hitTop = findTopmostStageItemAtWorld(wClick.x, wClick.y);
 
-  // Режим Ctrl + Drag & Drop: перетаскивание объекта(ов) зажатием Ctrl + ЛКМ.
-  // Если курсор попадает по уже выделенному в списке слоёв объекту (даже если поверх него перекрывается другой),
-  // двигаем именно выделенный объект(ы) — удобно при сборке многослойных сцен!
   if (e.ctrlKey || e.metaKey) {
     e.preventDefault();
     e.stopPropagation();
@@ -1829,7 +2368,6 @@ function handleStageViewportMouseDown(e, fromGizmoInterior) {
     return;
   }
 
-  // Обычный клик / Shift-выделение / рамка выделения группы
   if (hitTop) {
     e.preventDefault();
     if (e.shiftKey) {
@@ -1846,7 +2384,7 @@ function handleStageViewportMouseDown(e, fromGizmoInterior) {
   }
 }
 
-// -------- дерево слоёв сцены, папки и Z-порядок (правая панель) --------
+// -------- дерево слоёв сцены, папки, разгруппировка, дублирование и Z-порядок --------
 
 function buildStageTreeIndex() {
   const items = (App.stage.data && App.stage.data.items) || [];
@@ -1917,7 +2455,7 @@ function renderStageLayers() {
 
   const bg = App.stage.data.background;
 
-  // 1) Закреплённая строка «Бэкграунд» (самый дальний задний план)
+  // 1) Встроенный закреплённый слой «Бэкграунд»
   const bgLi = document.createElement('li');
   bgLi.dataset.stageId = '__bg__';
   bgLi.className = 'stage-bg-row' + (App.stage.selectedIds.has('__bg__') ? ' selected' : '');
@@ -1950,7 +2488,7 @@ function renderStageLayers() {
 
   els.stageLayersList.appendChild(bgLi);
 
-  // 2) Иерархия пользовательских папок и слоёв (сверху вниз: от дальних к ближним)
+  // 2) Иерархия папок и слоёв
   const { childrenOf, roots } = buildStageTreeIndex();
 
   function renderNode(it, depth) {
@@ -1965,9 +2503,19 @@ function renderStageLayers() {
     const typeIcon = it.isGroup
       ? 'folder'
       : (it.type === 'object' ? 'smart_toy' : 'image');
-    const badgeTxt = it.isGroup
-      ? ((childrenOf[it.id] || []).length + ' сл.')
-      : (it.type === 'object' ? (it.animation === '__static__' ? 'static' : (it.animation || 'idle')) : 'asset');
+
+    let badgeTxt;
+    if (it.isGroup) {
+      badgeTxt = (childrenOf[it.id] || []).length + ' сл.';
+    } else if (it.interaction && it.interaction.role === 'interactive') {
+      badgeTxt = 'interactive';
+    } else if (it.interaction && it.interaction.role === 'scripted') {
+      badgeTxt = 'scripted';
+    } else if (it.type === 'object') {
+      badgeTxt = it.animation === '__static__' ? 'static' : (it.animation || 'idle');
+    } else {
+      badgeTxt = 'asset';
+    }
 
     li.innerHTML =
       '<button type="button" class="stage-layer-vis" title="Показать / скрыть">' +
@@ -2004,7 +2552,6 @@ function renderStageLayers() {
       startStageLayerInlineRename(li, it);
     });
 
-    // Drag & Drop смены Z-порядка и вложенности в папки
     li.addEventListener('dragstart', (e) => {
       App.stage._dragLayerId = it.id;
       li.classList.add('dragging');
@@ -2051,7 +2598,7 @@ function renderStageLayers() {
       App.stage._dragLayerId = null;
       const mode = li.classList.contains('drop-before') ? 'before'
                  : li.classList.contains('drop-after')  ? 'after'
-                 : li.classList.contains('drop-into')  ? 'into' : null;
+                 : li.classList.contains('drop-into')   ? 'into' : null;
       els.stageLayersList.querySelectorAll('li').forEach(x =>
         x.classList.remove('drop-before', 'drop-after', 'drop-into', 'dragging')
       );
@@ -2141,8 +2688,10 @@ function createStageFolder() {
   const existingLabels = App.stage.data.items.filter(x => x.isGroup).map(x => x.label);
   const label = resolveAutoName(existingLabels, 'Папка ');
   let parent = null;
-  if (App.stage.selectedId && isStageFolderId(App.stage.selectedId)) {
-    parent = App.stage.selectedId;
+  const sel = Array.from(App.stage.selectedIds).filter(x => x !== '__bg__');
+
+  if (sel.length === 1 && isStageFolderId(sel[0])) {
+    parent = sel[0];
   }
   const folder = {
     id,
@@ -2154,10 +2703,99 @@ function createStageFolder() {
   };
   App.stage.data.items.push(folder);
   App.stage.domItems[id] = buildFolderDom(folder);
+
+  // Если при создании папки выделены слои — сразу упаковываем их в новую папку
+  if (sel.length > 0 && !(sel.length === 1 && isStageFolderId(sel[0]))) {
+    for (const sid of sel) {
+      const item = App.stage.data.items.find(x => x.id === sid);
+      if (item && item.id !== id && !isStageDescendantOf(id, item.id)) {
+        item.parent = id;
+      }
+    }
+  }
+
   syncStageDomOrder();
   markStageDirty();
   setStageSelection([id], id);
   setHint('Создана папка слоёв «' + label + '»', 1800);
+}
+
+function ungroupSelectedStageFolder() {
+  if (!App.stage.data) return;
+  let folderId = null;
+  if (App.stage.selectedId && isStageFolderId(App.stage.selectedId)) {
+    folderId = App.stage.selectedId;
+  } else {
+    const cur = App.stage.data.items.find(x => x.id === App.stage.selectedId);
+    if (cur && cur.parent) folderId = cur.parent;
+  }
+  if (!folderId) {
+    setHint('Выберите папку (или слой внутри папки) для разгруппировки', 1800);
+    return;
+  }
+  const folder = App.stage.data.items.find(x => x.id === folderId);
+  if (!folder) return;
+
+  const releasedIds = [];
+  for (const it of App.stage.data.items) {
+    if (it.parent === folderId) {
+      it.parent = folder.parent || null;
+      releasedIds.push(it.id);
+    }
+  }
+
+  const dom = App.stage.domItems[folderId];
+  if (dom && dom.outerG && dom.outerG.parentNode) {
+    dom.outerG.parentNode.removeChild(dom.outerG);
+  }
+  delete App.stage.domItems[folderId];
+  App.stage.data.items = App.stage.data.items.filter(x => x.id !== folderId);
+
+  syncStageDomOrder();
+  markStageDirty();
+  setStageSelection(releasedIds.length ? releasedIds : ['__bg__'], releasedIds[0] || '__bg__');
+  setHint('Папка «' + folder.label + '» разгруппирована', 1600);
+}
+
+async function duplicateSelectedStageItems() {
+  if (!App.stage.data) return;
+  const sel = Array.from(App.stage.selectedIds).filter(id => id !== '__bg__');
+  if (!sel.length) {
+    setHint('Выберите слой для дублирования', 1600);
+    return;
+  }
+  const existingLabels = App.stage.data.items.map(x => x.label);
+  const newIds = [];
+  for (const sid of sel) {
+    const src = App.stage.data.items.find(x => x.id === sid);
+    if (!src || src.isGroup) continue;
+    const copy = clone(src);
+    copy.id = nextStageItemId(copy.type === 'object' ? 'obj' : 'asset');
+    copy.label = resolveAutoName(existingLabels, (src.label || src.id) + '_');
+    existingLabels.push(copy.label);
+    copy.anchor = {
+      x: Math.min(0.98, (copy.anchor.x || 0.5) + 0.02),
+      y: Math.min(0.98, (copy.anchor.y || 0.5) + 0.02)
+    };
+    App.stage.data.items.push(copy);
+    if (copy.type === 'object' && copy.objectName) {
+      const tpl = await loadStageObjectTemplate(copy.objectName);
+      const dom = buildObjectInstanceDom(copy, tpl);
+      App.stage.domItems[copy.id] = dom;
+      applyInstanceAnimationPose(copy, dom, App.stage.playing ? App.stage.time : 0);
+    } else if (copy.type === 'asset' && copy.file) {
+      const asset = await fetchStageAssetParsed(App.stage.current, copy.file);
+      App.stage.domItems[copy.id] = buildAssetInstanceDom(copy, asset);
+    }
+    syncStageItemTransform(copy);
+    newIds.push(copy.id);
+  }
+  if (newIds.length) {
+    syncStageDomOrder();
+    markStageDirty();
+    setStageSelection(newIds, newIds[newIds.length - 1]);
+    setHint('Дублировано слоёв: ' + newIds.length, 1600);
+  }
 }
 
 function deleteSelectedStageItems() {
@@ -2207,7 +2845,7 @@ async function openStagePickModal() {
   }
   App.stage._pendingFolderId = targetParent;
   App.stage._pickSelected = null;
-  els.modalStagePickObj.hidden = false;
+  if (els.modalStagePickObj) els.modalStagePickObj.hidden = false;
   await renderStagePickList();
 }
 
@@ -2216,6 +2854,7 @@ function closeStagePickModal() {
 }
 
 async function renderStagePickList() {
+  if (!els.stagePickList) return;
   const tab = App.stage._pickTab || 'object';
   if (els.stagePickTabObj)   els.stagePickTabObj.classList.toggle('active', tab === 'object');
   if (els.stagePickTabAsset) els.stagePickTabAsset.classList.toggle('active', tab === 'asset');
@@ -2257,7 +2896,7 @@ async function renderStagePickList() {
     els.stagePickList.innerHTML = '';
     if (!assets.length) {
       els.stagePickList.innerHTML =
-        '<li class="empty">В папке сцены пока нет SVG/PNG файлов. Нажмите «Загрузить SVG / PNG…».</li>';
+        '<li class="empty">В папке сцены пока нет SVG/PNG файлов. Нажмите «Загрузить файл…».</li>';
       return;
     }
     if (!App.stage._pickSelected || !assets.includes(App.stage._pickSelected)) {
@@ -2286,6 +2925,7 @@ async function renderStagePickList() {
 
 async function addObjectLayerToStageCenter(objectName, parentFolderId) {
   if (!App.stage.data || !objectName) return null;
+  ensureStageViewportSkeleton();
   const tpl = await loadStageObjectTemplate(objectName);
   const id = nextStageItemId('obj');
   const existingLabels = App.stage.data.items.map(x => x.label);
@@ -2303,13 +2943,13 @@ async function addObjectLayerToStageCenter(objectName, parentFolderId) {
     scaleMode: 'fit',
     scale: { x: 1, y: 1 },
     rotation: 0,
-    pivotOffset: { x: 0, y: 0 },
     animation: tpl.defaultAnim || '__static__',
     loop: true,
     speed: 1,
     phase: 0,
     visible: true,
-    opacity: 1
+    opacity: 1,
+    interaction: normalizeStageInteraction(null, 'object')
   };
 
   App.stage.data.items.push(item);
@@ -2326,6 +2966,7 @@ async function addObjectLayerToStageCenter(objectName, parentFolderId) {
 
 async function addAssetLayerToStageCenter(fileName, parentFolderId) {
   if (!App.stage.data || !fileName) return null;
+  ensureStageViewportSkeleton();
   const asset = await fetchStageAssetParsed(App.stage.current, fileName);
   const id = nextStageItemId('asset');
   const baseLabel = fileName.replace(/\.[^.]+$/, '');
@@ -2344,9 +2985,9 @@ async function addAssetLayerToStageCenter(fileName, parentFolderId) {
     scaleMode: 'fit',
     scale: { x: 1, y: 1 },
     rotation: 0,
-    pivotOffset: { x: 0, y: 0 },
     visible: true,
-    opacity: 1
+    opacity: 1,
+    interaction: normalizeStageInteraction(null, 'asset')
   };
 
   App.stage.data.items.push(item);
@@ -2379,37 +3020,46 @@ async function confirmAddStageLayerFromModal() {
 // -------- загрузка файла SVG / PNG для фона или ассета сцены --------
 
 function triggerStageFileUpload(targetKind) {
-  if (!App.stage.current || !els.stageFileInput) return;
+  if (!App.stage.current) return;
   App.stage._uploadTarget = targetKind; // 'bg' | 'asset'
-  els.stageFileInput.value = '';
-  els.stageFileInput.click();
+  const inputEl = (targetKind === 'asset' && els.stagePickAssetInput)
+    ? els.stagePickAssetInput
+    : els.stageFileInput;
+  if (!inputEl) return;
+  inputEl.value = '';
+  inputEl.click();
 }
 
-async function handleStageFileInputChange() {
-  const f = els.stageFileInput && els.stageFileInput.files && els.stageFileInput.files[0];
-  if (!f || !App.stage.current) return;
+async function handleStageUploadedFiles(fileList, targetKind) {
+  if (!fileList || !fileList.length || !App.stage.current) return;
   try {
-    const savedName = await uploadStageAssetBackend(App.stage.current, f);
-    if (!App.stage.assets.includes(savedName)) {
-      App.stage.assets.push(savedName);
-      App.stage.assets.sort((a, b) => a.localeCompare(b));
+    let lastSaved = '';
+    for (let i = 0; i < fileList.length; i++) {
+      const f = fileList[i];
+      const savedName = await uploadStageAssetBackend(App.stage.current, f);
+      if (!App.stage.assets.includes(savedName)) {
+        App.stage.assets.push(savedName);
+      }
+      lastSaved = savedName;
     }
-    if (App.stage._uploadTarget === 'bg') {
-      App.stage.data.background.file = savedName;
+    App.stage.assets.sort((a, b) => a.localeCompare(b));
+
+    if (targetKind === 'bg' && lastSaved) {
+      App.stage.data.background.file = lastSaved;
       markStageDirty();
       await renderStageBackground();
       renderStageLayers();
       renderStageProperties();
-      setHint('Фон сцены установлен: ' + savedName, 2200);
-    } else {
+      setHint('Фон сцены установлен: ' + lastSaved, 2200);
+    } else if (lastSaved) {
       App.stage._pickTab = 'asset';
-      App.stage._pickSelected = savedName;
-      if (!els.modalStagePickObj.hidden) {
+      App.stage._pickSelected = lastSaved;
+      if (els.modalStagePickObj && !els.modalStagePickObj.hidden) {
         await renderStagePickList();
       } else {
-        await addAssetLayerToStageCenter(savedName, App.stage._pendingFolderId || null);
+        await addAssetLayerToStageCenter(lastSaved, App.stage._pendingFolderId || null);
       }
-      setHint('Файл загружен в сцену: ' + savedName, 2000);
+      setHint('Файл загружен в сцену: ' + lastSaved, 2000);
     }
   } catch (e) {
     setHint('Ошибка загрузки файла: ' + e.message, 3400);
@@ -2478,9 +3128,7 @@ function syncStageInspectorLive() {
     'px.y':  wpos.y.toFixed(1),
     'scl.x': it.scale.x.toFixed(3),
     'scl.y': it.scale.y.toFixed(3),
-    'rot':   it.rotation.toFixed(1),
-    'piv.x': ((it.pivotOffset && it.pivotOffset.x) || 0).toFixed(1),
-    'piv.y': ((it.pivotOffset && it.pivotOffset.y) || 0).toFixed(1)
+    'rot':   it.rotation.toFixed(1)
   };
   for (const k of Object.keys(map)) {
     const inp = props.querySelector('input[data-skey="' + k + '"]');
@@ -2500,11 +3148,14 @@ function renderStageProperties() {
   const selId = App.stage.selectedId || '__bg__';
   const leaves = getSelectedTransformLeafItems();
 
-  // 1) Свойства Бэкграунда и опорного разрешения сцены (по умолчанию 1366×768)
+  // 1) Выбран встроенный слой «Бэкграунд» (свойства самого фона СВЁРНУТЫ по умолчанию)
   if (selId === '__bg__' || (!leaves.length && !isStageFolderId(selId))) {
-    const bg = App.stage.data.background;
-    const fr = App.stage.data.frame;
-    els.propsTitle.textContent = 'Бэкграунд сцены';
+    const st = App.stage.data;
+    const bg = st.background;
+    const fr = st.frame;
+    const guides = st.guides || [];
+    const bgExpanded = !!App.stage.bgPropsExpanded;
+    els.propsTitle.textContent = 'Сцена и Бэкграунд';
 
     let fileOptions = '<option value="">— Без картинки (сплошной прямоугольник) —</option>';
     for (const f of (App.stage.assets || [])) {
@@ -2512,13 +3163,51 @@ function renderStageProperties() {
       fileOptions += '<option value="' + escapeHtmlAttr(f) + '"' + sel + '>' + escapeHtmlAttr(f) + '</option>';
     }
 
+    const bgSummary = bg.file ? bg.file : (bg.color || '#243447');
+    const toggleIcon = bgExpanded ? 'expand_less' : 'expand_more';
+
     props.innerHTML =
-      '<label class="pcheck">' +
-        '<input type="checkbox" id="sprop-bg-vis"' + (bg.visible !== false ? ' checked' : '') + '>' +
-        '<span>Показывать фон сцены</span>' +
-      '</label>' +
+      // Сворачиваемая карточка Бэкграунда — СВЁРНУТА по умолчанию
+      '<div class="stage-collapse-card">' +
+        '<button type="button" class="stage-collapse-head" id="sprop-bg-collapse-btn">' +
+          '<span class="material-icons">' + toggleIcon + '</span>' +
+          '<span>Свойства Бэкграунда</span>' +
+          '<span class="stage-collapse-summary">' + escapeHtmlAttr(bgSummary) + '</span>' +
+        '</button>' +
+        '<div class="stage-collapse-body" id="sprop-bg-collapse-body"' + (bgExpanded ? '' : ' hidden') + '>' +
+          '<label class="pcheck">' +
+            '<input type="checkbox" id="sprop-bg-vis"' + (bg.visible !== false ? ' checked' : '') + '>' +
+            '<span>Показывать фон сцены</span>' +
+          '</label>' +
+          '<div class="pgroup-title" style="margin-top:4px">Цвет прямоугольника фона</div>' +
+          '<div class="stage-color-row">' +
+            '<input type="color" id="sprop-bg-color" value="' + escapeHtmlAttr(normalizeHex6(bg.color)) + '">' +
+            '<input type="text" id="sprop-bg-hex" value="' + escapeHtmlAttr(bg.color || '#243447') + '">' +
+          '</div>' +
+          '<div class="pgroup-title" style="margin-top:6px">Картинка фона (SVG / PNG)</div>' +
+          '<select id="sprop-bg-file" class="stage-prop-select">' + fileOptions + '</select>' +
+          '<div class="stage-btn-row">' +
+            '<button type="button" id="sprop-bg-upload" class="stage-btn-sm primary-green">Загрузить SVG / PNG…</button>' +
+            (bg.file ? '<button type="button" id="sprop-bg-clear" class="stage-btn-sm">Убрать</button>' : '') +
+          '</div>' +
+          '<div class="pgroup-title" style="margin-top:6px">Режим заполнения</div>' +
+          '<select id="sprop-bg-fit" class="stage-prop-select">' +
+            '<option value="stretch"' + (bg.fit === 'stretch' ? ' selected' : '') + '>Растянуть по экрану (stretch)</option>' +
+            '<option value="cover"'   + (bg.fit === 'cover'   ? ' selected' : '') + '>Заполнить с обрезкой (cover)</option>' +
+            '<option value="contain"' + (bg.fit === 'contain' ? ' selected' : '') + '>Вписать целиком (contain)</option>' +
+            '<option value="center"'  + (bg.fit === 'center'  ? ' selected' : '') + '>По центру 1:1 (center)</option>' +
+          '</select>' +
+          stagePropRowHtml('Alpha', 'bg.op', bg.opacity ?? 1, 0.05, 2) +
+        '</div>' +
+      '</div>' +
+
+      // Карточка целевого фрэйма игры и типа сцены (Игровая / Катсцена)
       '<div class="pgroup">' +
-        '<div class="pgroup-title">Опорный экран, px</div>' +
+        '<div class="pgroup-title">Фрэйм игры и назначение сцены</div>' +
+        '<select id="sprop-scene-kind" class="stage-prop-select">' +
+          '<option value="gameplay"' + (st.sceneKind !== 'cutscene' ? ' selected' : '') + '>Игровая интерактивная сцена</option>' +
+          '<option value="cutscene"' + (st.sceneKind === 'cutscene' ? ' selected' : '') + '>Сцена для катсцены / анимации</option>' +
+        '</select>' +
         stagePropRowHtml('W', 'frame.w', fr.width, 10, 0) +
         stagePropRowHtml('H', 'frame.h', fr.height, 10, 0) +
         '<div class="stage-btn-row">' +
@@ -2527,29 +3216,47 @@ function renderStageProperties() {
           '<button type="button" class="stage-btn-sm" data-res="1280x720">1280×720</button>' +
         '</div>' +
       '</div>' +
+
+      // Быстрое управление направляющими
       '<div class="pgroup">' +
-        '<div class="pgroup-title">Цвет прямоугольника фона</div>' +
-        '<div class="stage-color-row">' +
-          '<input type="color" id="sprop-bg-color" value="' + escapeHtmlAttr(normalizeHex6(bg.color)) + '">' +
-          '<input type="text" id="sprop-bg-hex" value="' + escapeHtmlAttr(bg.color || '#243447') + '">' +
-        '</div>' +
-      '</div>' +
-      '<div class="pgroup">' +
-        '<div class="pgroup-title">Картинка фона (SVG / PNG)</div>' +
-        '<select id="sprop-bg-file" class="stage-prop-select">' + fileOptions + '</select>' +
+        '<div class="pgroup-title">Направляющие (' + guides.length + ')</div>' +
         '<div class="stage-btn-row">' +
-          '<button type="button" id="sprop-bg-upload" class="stage-btn-sm primary-green">Загрузить SVG / PNG…</button>' +
-          (bg.file ? '<button type="button" id="sprop-bg-clear" class="stage-btn-sm">Убрать</button>' : '') +
+          '<button type="button" id="sprop-guide-center" class="stage-btn-sm">+ Крест по центру (50%)</button>' +
+          (guides.length ? '<button type="button" id="sprop-guide-clear" class="stage-btn-sm">Очистить</button>' : '') +
         '</div>' +
-        '<div class="pgroup-title" style="margin-top:6px">Режим заполнения</div>' +
-        '<select id="sprop-bg-fit" class="stage-prop-select">' +
-          '<option value="stretch"' + (bg.fit === 'stretch' ? ' selected' : '') + '>Растянуть по экрану (stretch)</option>' +
-          '<option value="cover"'   + (bg.fit === 'cover'   ? ' selected' : '') + '>Заполнить с обрезкой (cover)</option>' +
-          '<option value="contain"' + (bg.fit === 'contain' ? ' selected' : '') + '>Вписать целиком (contain)</option>' +
-          '<option value="center"'  + (bg.fit === 'center'  ? ' selected' : '') + '>По центру 1:1 (center)</option>' +
-        '</select>' +
-        stagePropRowHtml('Alpha', 'bg.op', bg.opacity ?? 1, 0.05, 2) +
       '</div>';
+
+    props.querySelector('#sprop-bg-collapse-btn').addEventListener('click', () => {
+      App.stage.bgPropsExpanded = !App.stage.bgPropsExpanded;
+      renderStageProperties();
+    });
+
+    props.querySelector('#sprop-scene-kind').addEventListener('change', (e) => {
+      st.sceneKind = e.target.value === 'cutscene' ? 'cutscene' : 'gameplay';
+      markStageDirty();
+    });
+
+    props.querySelector('#sprop-guide-center').addEventListener('click', () => {
+      st.guides.push(
+        { id: nextStageGuideId(), axis: 'v', pos: 0.5 }
+      );
+      st.guides.push(
+        { id: nextStageGuideId(), axis: 'h', pos: 0.5 }
+      );
+      markStageDirty();
+      renderStageGuidesOverlay();
+      renderStageProperties();
+    });
+
+    const clearGuidesBtn = props.querySelector('#sprop-guide-clear');
+    if (clearGuidesBtn) {
+      clearGuidesBtn.addEventListener('click', () => {
+        st.guides = [];
+        markStageDirty();
+        renderStageGuidesOverlay();
+        renderStageProperties();
+      });
+    }
 
     props.querySelector('#sprop-bg-vis').addEventListener('change', (e) => {
       bg.visible = e.target.checked;
@@ -2605,11 +3312,13 @@ function renderStageProperties() {
       btn.addEventListener('click', () => {
         const [w, h] = btn.dataset.res.split('x').map(Number);
         fr.width = w; fr.height = h;
+        syncStageRubberSlidersToBase();
         markStageDirty();
         renderStageBackground();
         syncAllStageTransforms();
         renderStageLayers();
         renderStageProperties();
+        renderStageRulersAndGuides();
         StageGizmo.render();
       });
     });
@@ -2622,13 +3331,14 @@ function renderStageProperties() {
         return 0;
       },
       set(k, v) {
-        if (k === 'frame.w') fr.width  = clamp(Math.round(v), 128, 7680);
-        if (k === 'frame.h') fr.height = clamp(Math.round(v), 128, 4320);
+        if (k === 'frame.w') { fr.width  = clamp(Math.round(v), 128, 7680); syncStageRubberSlidersToBase(); }
+        if (k === 'frame.h') { fr.height = clamp(Math.round(v), 128, 4320); syncStageRubberSlidersToBase(); }
         if (k === 'bg.op')   bg.opacity = clamp(v, 0, 1);
         markStageDirty();
         renderStageBackground();
         syncAllStageTransforms();
         renderStageLayers();
+        renderStageRulersAndGuides();
         StageGizmo.render();
       },
       reset: { 'frame.w': 1366, 'frame.h': 768, 'bg.op': 1 }
@@ -2636,7 +3346,7 @@ function renderStageProperties() {
     return;
   }
 
-  // 2) Групповое выделение (выбрана папка ИЛИ несколько слоёв): Групповой скейл и центрирование
+  // 2) Групповое выделение (папка ИЛИ несколько слоёв)
   if (leaves.length > 1 || isStageFolderId(selId)) {
     const folder = isStageFolderId(selId)
       ? App.stage.data.items.find(x => x.id === selId)
@@ -2746,16 +3456,19 @@ function renderStageProperties() {
     return;
   }
 
-  // 3) Одиночный слой сцены (анимированный объект anim/ или ассет stage/)
+  // 3) Одиночный слой сцены (анимированный объект anim/ или декор stage/)
   const it = leaves[0];
+  it.interaction = normalizeStageInteraction(it.interaction, it.type);
+  const inter = it.interaction;
   const m = getStageFrameMetrics();
   const wpos = anchorToWorld(it.anchor, m);
   els.propsTitle.textContent = (it.type === 'object' ? 'Объект: ' : 'Слой: ') + (it.label || it.id);
 
   let animBlockHtml = '';
+  let animNames = [];
   if (it.type === 'object') {
     const tpl = App.stage.templates[it.objectName];
-    const animNames = tpl ? tpl.animNames : [];
+    animNames = tpl ? tpl.animNames : [];
     let animOpts = '<option value="__static__"' + (it.animation === '__static__' ? ' selected' : '') + '>— Статика (базовая поза) —</option>';
     for (const an of animNames) {
       const sel = (it.animation === an) ? ' selected' : '';
@@ -2763,7 +3476,7 @@ function renderStageProperties() {
     }
     animBlockHtml =
       '<div class="pgroup">' +
-        '<div class="pgroup-title">Тестовая анимация (' + escapeHtmlAttr(it.objectName) + ')</div>' +
+        '<div class="pgroup-title">Анимация по умолчанию (' + escapeHtmlAttr(it.objectName) + ')</div>' +
         '<select id="sprop-obj-anim" class="stage-prop-select">' + animOpts + '</select>' +
         '<label class="pcheck">' +
           '<input type="checkbox" id="sprop-obj-loop"' + (it.loop !== false ? ' checked' : '') + '>' +
@@ -2777,17 +3490,52 @@ function renderStageProperties() {
       '</div>';
   }
 
+  let clickAnimOpts = '<option value="">— Без смены анимации —</option>';
+  for (const an of animNames) {
+    const sel = (inter.onClickAnim === an) ? ' selected' : '';
+    clickAnimOpts += '<option value="' + escapeHtmlAttr(an) + '"' + sel + '>' + escapeHtmlAttr(an) + '</option>';
+  }
+
   props.innerHTML =
     '<label class="pcheck">' +
       '<input type="checkbox" id="sprop-item-vis"' + (it.visible !== false ? ' checked' : '') + '>' +
-      '<span>Видимость на сцене</span>' +
+      '<span>Видимость в редакторе</span>' +
     '</label>' +
     animBlockHtml +
     '<div class="pgroup">' +
-      '<div class="pgroup-title">Позиция (% от экрана — резиновая)</div>' +
+      '<div class="pgroup-title">Поведение в игре / катсцене</div>' +
+      '<select id="sprop-inter-role" class="stage-prop-select">' +
+        '<option value="static"'      + (inter.role === 'static'      ? ' selected' : '') + '>Статичный декор</option>' +
+        '<option value="animated"'    + (inter.role === 'animated'    ? ' selected' : '') + '>Фоновая анимация</option>' +
+        '<option value="interactive"' + (inter.role === 'interactive' ? ' selected' : '') + '>Интерактивный объект (клик / drag)</option>' +
+        '<option value="scripted"'    + (inter.role === 'scripted'    ? ' selected' : '') + '>Управляется игрой / катсценой</option>' +
+      '</select>' +
+      '<select id="sprop-inter-init" class="stage-prop-select" title="Начальное состояние при старте сцены">' +
+        '<option value="visible"' + (inter.initialState !== 'hidden' ? ' selected' : '') + '>На старте игры: Показан</option>' +
+        '<option value="hidden"'  + (inter.initialState === 'hidden' ? ' selected' : '') + '>На старте игры: Скрыт (ждёт триггер)</option>' +
+      '</select>' +
+      '<label class="pcheck">' +
+        '<input type="checkbox" id="sprop-inter-click"' + (inter.clickable ? ' checked' : '') + '>' +
+        '<span>Реагирует на клик / тап</span>' +
+      '</label>' +
+      '<label class="pcheck">' +
+        '<input type="checkbox" id="sprop-inter-drag"' + (inter.draggable ? ' checked' : '') + '>' +
+        '<span>Перетаскиваемый игроком (Drag & Drop)</span>' +
+      '</label>' +
+      (it.type === 'object'
+        ? '<div class="pgroup-title" style="margin-top:4px">Анимация по клику / событию</div>' +
+          '<select id="sprop-inter-click-anim" class="stage-prop-select">' + clickAnimOpts + '</select>'
+        : '') +
+      '<div class="prow" style="margin-top:4px">' +
+        '<span class="plabel">ID</span>' +
+        '<input type="text" id="sprop-inter-tag" class="stage-prop-select" style="margin:0" placeholder="game_id (напр. fairy_npc)" value="' + escapeHtmlAttr(inter.gameTag) + '">' +
+      '</div>' +
+    '</div>' +
+    '<div class="pgroup">' +
+      '<div class="pgroup-title">Позиция пивота (% от фрэйма — резиновая)</div>' +
       stagePropRowHtml('X%', 'anc.x', it.anchor.x * 100, 0.5, 2) +
       stagePropRowHtml('Y%', 'anc.y', it.anchor.y * 100, 0.5, 2) +
-      '<div class="pgroup-title" style="margin-top:5px">Мировые координаты, px</div>' +
+      '<div class="pgroup-title" style="margin-top:5px">Мировые координаты пивота, px</div>' +
       stagePropRowHtml('X', 'px.x', wpos.x, 2, 1) +
       stagePropRowHtml('Y', 'px.y', wpos.y, 2, 1) +
       '<div class="stage-btn-row">' +
@@ -2817,11 +3565,6 @@ function renderStageProperties() {
       '<div class="pgroup-title">Поворот и прозрачность</div>' +
       stagePropRowHtml('R°', 'rot', it.rotation, 1, 1) +
       stagePropRowHtml('Op', 'op', it.opacity ?? 1, 0.05, 2) +
-    '</div>' +
-    '<div class="pgroup">' +
-      '<div class="pgroup-title">Смещение пивота от исходного, px</div>' +
-      stagePropRowHtml('PX', 'piv.x', (it.pivotOffset && it.pivotOffset.x) || 0, 1, 1) +
-      stagePropRowHtml('PY', 'piv.y', (it.pivotOffset && it.pivotOffset.y) || 0, 1, 1) +
     '</div>';
 
   props.querySelector('#sprop-item-vis').addEventListener('change', (e) => {
@@ -2830,6 +3573,44 @@ function renderStageProperties() {
     syncStageItemTransform(it);
     renderStageLayers();
     StageGizmo.render();
+  });
+
+  props.querySelector('#sprop-inter-role').addEventListener('change', (e) => {
+    inter.role = e.target.value;
+    if (inter.role === 'interactive' && !inter.clickable && !inter.draggable) {
+      inter.clickable = true;
+      const chk = props.querySelector('#sprop-inter-click');
+      if (chk) chk.checked = true;
+    }
+    markStageDirty();
+    renderStageLayers();
+  });
+  props.querySelector('#sprop-inter-init').addEventListener('change', (e) => {
+    inter.initialState = e.target.value === 'hidden' ? 'hidden' : 'visible';
+    markStageDirty();
+  });
+  props.querySelector('#sprop-inter-click').addEventListener('change', (e) => {
+    inter.clickable = e.target.checked;
+    if (inter.clickable && inter.role === 'static') inter.role = 'interactive';
+    markStageDirty();
+    renderStageLayers();
+  });
+  props.querySelector('#sprop-inter-drag').addEventListener('change', (e) => {
+    inter.draggable = e.target.checked;
+    if (inter.draggable && inter.role === 'static') inter.role = 'interactive';
+    markStageDirty();
+    renderStageLayers();
+  });
+  const clickAnimSel = props.querySelector('#sprop-inter-click-anim');
+  if (clickAnimSel) {
+    clickAnimSel.addEventListener('change', (e) => {
+      inter.onClickAnim = e.target.value;
+      markStageDirty();
+    });
+  }
+  props.querySelector('#sprop-inter-tag').addEventListener('change', (e) => {
+    inter.gameTag = e.target.value.trim();
+    markStageDirty();
   });
 
   if (it.type === 'object') {
@@ -2912,8 +3693,6 @@ function renderStageProperties() {
       if (k === 'scl.y') return it.scale.y;
       if (k === 'rot')   return it.rotation;
       if (k === 'op')    return it.opacity ?? 1;
-      if (k === 'piv.x') return (it.pivotOffset && it.pivotOffset.x) || 0;
-      if (k === 'piv.y') return (it.pivotOffset && it.pivotOffset.y) || 0;
       if (k === 'anim.spd') return it.speed ?? 1;
       if (k === 'anim.ph')  return it.phase ?? 0;
       return 0;
@@ -2929,8 +3708,6 @@ function renderStageProperties() {
       if (k === 'scl.y') it.scale.y = roundScaleVal(v);
       if (k === 'rot')   it.rotation = v;
       if (k === 'op')    it.opacity = clamp(v, 0, 1);
-      if (k === 'piv.x') { it.pivotOffset = it.pivotOffset || { x: 0, y: 0 }; it.pivotOffset.x = v; }
-      if (k === 'piv.y') { it.pivotOffset = it.pivotOffset || { x: 0, y: 0 }; it.pivotOffset.y = v; }
       if (k === 'anim.spd') it.speed = clamp(v, 0.05, 10);
       if (k === 'anim.ph')  {
         it.phase = v;
@@ -2948,7 +3725,6 @@ function renderStageProperties() {
       'px.x': 0,   'px.y': 0,
       'scl.x': 1,  'scl.y': 1,
       'rot': 0,    'op': 1,
-      'piv.x': 0,  'piv.y': 0,
       'anim.spd': 1, 'anim.ph': 0
     }
   });
@@ -3009,6 +3785,22 @@ function escapeHtmlAttr(s) {
     .replace(/>/g, '&gt;');
 }
 
+// -------- сворачивание нижней панели сцены по кнопке-стрелочке --------
+
+function toggleStageBarCollapse() {
+  App.stage.barCollapsed = !App.stage.barCollapsed;
+  if (els.stageBar) {
+    els.stageBar.classList.toggle('collapsed', App.stage.barCollapsed);
+  }
+  if (els.stageBarToggleIcon) {
+    els.stageBarToggleIcon.textContent = App.stage.barCollapsed ? 'expand_less' : 'expand_more';
+  }
+  requestAnimationFrame(() => {
+    applyCamera();
+    renderStageRulersAndGuides();
+  });
+}
+
 // -------- открытие, сохранение и CRUD сцен --------
 
 function fitStageView() {
@@ -3016,13 +3808,14 @@ function fitStageView() {
   const vp = els.viewport;
   const W = vp.clientWidth || 1000;
   const H = vp.clientHeight || 640;
-  const pad = 48;
+  const rulerOffset = App.stage.showRulers ? RULER_THICK : 0;
+  const pad = 42;
   const z = Math.min(
-    Math.max(40, W - pad * 2) / m.fw,
-    Math.max(40, H - pad * 2) / m.fh
+    Math.max(40, W - rulerOffset - pad * 2) / m.fw,
+    Math.max(40, H - rulerOffset - pad * 2) / m.fh
   );
-  App.camera.x = 0;
-  App.camera.y = 0;
+  App.camera.x = -rulerOffset / (2 * Math.max(0.1, z));
+  App.camera.y = -rulerOffset / (2 * Math.max(0.1, z));
   App.camera.zoom = clamp(z, 0.05, 20);
   App.stage.camera = clone(App.camera);
   applyCamera();
@@ -3031,7 +3824,9 @@ function fitStageView() {
 async function openStage(name) {
   if (!name) return;
   try {
-    stopStagePreview();
+    if (App.stage.previewFullscreen) exitStageFullscreenPreview();
+    else stopStagePreview();
+
     App.stage._suppressDirty = true;
     const res = await fetchStageData(name);
     App.stage.current = name;
@@ -3040,6 +3835,8 @@ async function openStage(name) {
     App.stage.data = ensureStageStructure(res.stage, name);
     App.stage.selectedId = '__bg__';
     App.stage.selectedIds = new Set(['__bg__']);
+    App.stage.bgPropsExpanded = false; // Бэкграунд свёрнут по умолчанию
+    syncStageRubberSlidersToBase();
     if (els.stageName) els.stageName.value = name;
     setPref(PREF_LAST_STAGE, name);
 
@@ -3140,6 +3937,12 @@ async function populateStagesModalList() {
 
 function openStagesModal() {
   App.stage._selectedModalName = App.stage.current;
+  if (els.stagesSourceText && els.storageLabel) {
+    els.stagesSourceText.textContent = 'Источник: ' + (els.storageLabel.textContent || 'репозиторий');
+  }
+  if (els.stagesBtnReconnect) {
+    els.stagesBtnReconnect.hidden = !App.storage.pendingHandle;
+  }
   els.modalStages.hidden = false;
   populateStagesModalList();
 }
@@ -3270,14 +4073,14 @@ async function setEditorMode(nextMode) {
     App.objectCamera = clone(App.camera);
     syncLiveObjectToStageCache();
   } else {
-    stopStagePreview();
+    if (App.stage.previewFullscreen) exitStageFullscreenPreview();
+    else stopStagePreview();
     App.stage.camera = clone(App.camera);
   }
 
   App.editorMode = nextMode;
   document.body.setAttribute('data-editor-mode', nextMode);
 
-  // Кнопка-индикатор в шапке
   if (els.btnEditorMode) {
     els.btnEditorMode.classList.toggle('mode-object', !toStage);
     els.btnEditorMode.classList.toggle('mode-stage', toStage);
@@ -3288,25 +4091,29 @@ async function setEditorMode(nextMode) {
   if (els.editorModeIcon)  els.editorModeIcon.textContent  = toStage ? 'landscape' : 'animation';
   if (els.editorModeLabel) els.editorModeLabel.textContent = toStage ? 'СЦЕНА' : 'АНИМАЦИЯ';
 
-  // Верхняя панель
   if (els.headerObjectControls) els.headerObjectControls.hidden = toStage;
   if (els.headerStageControls)  els.headerStageControls.hidden  = !toStage;
 
-  // Вьюпорт и оверлеи Gizmo
+  // Вьюпорт, линейки, направляющие и оверлеи Gizmo
   if (els.scene)         els.scene.style.display = toStage ? 'none' : '';
   if (els.onion)         els.onion.style.display = toStage ? 'none' : '';
   if (els.gizmoSvg)      els.gizmoSvg.hidden = toStage;
-  if (els.stageRoot)     els.stageRoot.style.display = toStage ? '' : 'none';
+  if (els.stageRoot) {
+    els.stageRoot.removeAttribute('hidden');
+    els.stageRoot.style.display = toStage ? '' : 'none';
+  }
   if (els.stageGizmoSvg) els.stageGizmoSvg.hidden = !toStage;
 
-  // Панель инструментов, таймлайн и нижняя панель сцены
+  // В режиме Сцены полностью скрываем ключевой таймлайн и полосу воспроизведения объекта
   $$('.obj-mode-only').forEach(el => { el.hidden = toStage; });
   $$('.stage-mode-only').forEach(el => { el.hidden = !toStage; });
   if (els.playbackBar) els.playbackBar.hidden = toStage;
   if (els.timeline)    els.timeline.hidden    = toStage;
-  if (els.stageBar)    els.stageBar.hidden    = !toStage;
+  if (els.stageBar) {
+    els.stageBar.hidden = !toStage;
+    els.stageBar.classList.toggle('collapsed', toStage && !!App.stage.barCollapsed);
+  }
 
-  // Правая панель слоёв
   if (els.layersHeaderTitle)   els.layersHeaderTitle.textContent = toStage ? 'Слои сцены' : 'Слои';
   if (els.layersActionsObject) els.layersActionsObject.hidden = toStage;
   if (els.layersActionsStage)  els.layersActionsStage.hidden  = !toStage;
@@ -3320,7 +4127,9 @@ async function setEditorMode(nextMode) {
     els.viewport.style.background = '';
     App.camera = clone(App.stage.camera);
     await openInitialStageIfNeeded();
+    renderStageRulersAndGuides();
   } else {
+    renderStageRulersAndGuides();
     App.camera = clone(App.objectCamera);
     applyBackgroundToViewport();
     applyCamera();
@@ -3340,12 +4149,12 @@ function toggleEditorMode() {
 
 function setupStageEditor() {
   StageGizmo.init();
+  setupStageRulersAndGuidesInteraction();
 
   if (els.btnEditorMode) {
     els.btnEditorMode.addEventListener('click', toggleEditorMode);
   }
 
-  // Inline-переименование имени сцены в шапке
   if (typeof setupHeaderInlineRename === 'function') {
     setupHeaderInlineRename(
       els.stageNameGroup,
@@ -3376,6 +4185,12 @@ function setupStageEditor() {
   if (els.btnStages) els.btnStages.addEventListener('click', openStagesModal);
   if (els.modalStagesX) els.modalStagesX.addEventListener('click', closeStagesModal);
   if (els.modalStagesClose) els.modalStagesClose.addEventListener('click', closeStagesModal);
+  if (els.stagesBtnPick && typeof pickLocalFolder === 'function') {
+    els.stagesBtnPick.addEventListener('click', pickLocalFolder);
+  }
+  if (els.stagesBtnReconnect && typeof reconnectSavedFolder === 'function') {
+    els.stagesBtnReconnect.addEventListener('click', reconnectSavedFolder);
+  }
   if (els.modalStages) {
     els.modalStages.addEventListener('click', (e) => {
       if (e.target === els.modalStages) closeStagesModal();
@@ -3387,52 +4202,53 @@ function setupStageEditor() {
   if (els.stageDelete) els.stageDelete.addEventListener('click', deleteStageFromModal);
   if (els.stageOpen)   els.stageOpen.addEventListener('click', () => requestOpenStageFromModal());
 
-  // Инструменты во вьюпорте сцены
+  // Инструменты во вьюпорте сцены (линейки, привязка к направляющим, добавление, обрезка, сворачивание нижней панели)
+  if (els.btnStageRulers) {
+    els.btnStageRulers.classList.toggle('active', !!App.stage.showRulers);
+    els.btnStageRulers.addEventListener('click', () => {
+      App.stage.showRulers = !App.stage.showRulers;
+      els.btnStageRulers.classList.toggle('active', App.stage.showRulers);
+      renderStageRulersAndGuides();
+      setHint('Линейки и направляющие: ' + (App.stage.showRulers ? 'ВКЛ' : 'ВЫКЛ'), 1500);
+    });
+  }
+
+  if (els.btnStageGuideSnap) {
+    els.btnStageGuideSnap.classList.toggle('active', !!App.stage.guideSnap);
+    els.btnStageGuideSnap.addEventListener('click', () => {
+      App.stage.guideSnap = !App.stage.guideSnap;
+      els.btnStageGuideSnap.classList.toggle('active', App.stage.guideSnap);
+      setHint('Привязка объектов к направляющим (BBox + Pivot): ' + (App.stage.guideSnap ? 'ВКЛ' : 'ВЫКЛ'), 1600);
+    });
+  }
+
+  if (els.btnStageAddObj) {
+    els.btnStageAddObj.addEventListener('click', openStagePickModal);
+  }
+
   if (els.btnStageClip) {
     els.btnStageClip.addEventListener('click', () => {
       App.stage.clipFrame = !App.stage.clipFrame;
       els.btnStageClip.classList.toggle('active', App.stage.clipFrame);
       renderStageBackground();
-      setHint('Обрезка по рамке экрана: ' + (App.stage.clipFrame ? 'ВКЛ' : 'ВЫКЛ'), 1500);
-    });
-  }
-  if (els.btnStageCenter) {
-    els.btnStageCenter.addEventListener('click', () => {
-      const leaves = getSelectedTransformLeafItems();
-      if (!leaves.length) {
-        setHint('Выберите объект или группу для центрирования', 1600);
-        return;
-      }
-      if (leaves.length === 1) {
-        leaves[0].anchor = { x: 0.5, y: 0.5 };
-        syncStageItemTransform(leaves[0]);
-      } else {
-        const m = getStageFrameMetrics();
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const it of leaves) {
-          const b = getStageItemWorldAABB(it, m);
-          if (b.minX < minX) minX = b.minX;
-          if (b.minY < minY) minY = b.minY;
-          if (b.maxX > maxX) maxX = b.maxX;
-          if (b.maxY > maxY) maxY = b.maxY;
-        }
-        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-        for (const it of leaves) {
-          const wp = anchorToWorld(it.anchor, m);
-          it.anchor = worldToAnchor(wp.x - cx, wp.y - cy, m);
-          syncStageItemTransform(it, m);
-        }
-      }
-      markStageDirty();
-      syncStageInspectorLive();
-      StageGizmo.render();
+      setHint('Обрезка по фрэйму 1366×768: ' + (App.stage.clipFrame ? 'ВКЛ' : 'ВЫКЛ'), 1500);
     });
   }
 
+  if (els.btnStagePlayTop) {
+    els.btnStagePlayTop.addEventListener('click', enterStageFullscreenPreview);
+  }
+
+  if (els.btnStageBarToggle) {
+    els.btnStageBarToggle.addEventListener('click', toggleStageBarCollapse);
+  }
+
   // Слои сцены и модалка добавления
-  if (els.btnStageAddLayer)  els.btnStageAddLayer.addEventListener('click', openStagePickModal);
-  if (els.btnStageAddFolder) els.btnStageAddFolder.addEventListener('click', createStageFolder);
-  if (els.btnStageDelLayer)  els.btnStageDelLayer.addEventListener('click', deleteSelectedStageItems);
+  if (els.btnStageAddLayer)   els.btnStageAddLayer.addEventListener('click', openStagePickModal);
+  if (els.btnStageAddFolder)  els.btnStageAddFolder.addEventListener('click', createStageFolder);
+  if (els.btnStageUngroup)    els.btnStageUngroup.addEventListener('click', ungroupSelectedStageFolder);
+  if (els.btnStageCloneLayer) els.btnStageCloneLayer.addEventListener('click', duplicateSelectedStageItems);
+  if (els.btnStageDelLayer)   els.btnStageDelLayer.addEventListener('click', deleteSelectedStageItems);
 
   if (els.stagePickCloseX) els.stagePickCloseX.addEventListener('click', closeStagePickModal);
   if (els.stagePickCancel) els.stagePickCancel.addEventListener('click', closeStagePickModal);
@@ -3462,47 +4278,80 @@ function setupStageEditor() {
     els.stagePickAdd.addEventListener('click', confirmAddStageLayerFromModal);
   }
   if (els.stageFileInput) {
-    els.stageFileInput.addEventListener('change', handleStageFileInputChange);
+    els.stageFileInput.addEventListener('change', () => {
+      handleStageUploadedFiles(els.stageFileInput.files, App.stage._uploadTarget || 'bg');
+    });
+  }
+  if (els.stagePickAssetInput) {
+    els.stagePickAssetInput.addEventListener('change', () => {
+      handleStageUploadedFiles(els.stagePickAssetInput.files, 'asset');
+    });
   }
 
-  // Нижняя панель предпросмотра сцены и резинового теста экрана
+  // Полноэкранный чистый Предпросмотр по кнопке #stage-play-btn (выход — ESC)
   if (els.stagePlay) {
     els.stagePlay.addEventListener('click', () => {
-      if (App.stage.playing) pauseStagePreview();
-      else startStagePreview();
-    });
-  }
-  if (els.stageStop) {
-    els.stageStop.addEventListener('click', stopStagePreview);
-  }
-  if (els.stageSpeed) {
-    els.stageSpeed.addEventListener('change', () => {
-      App.stage.speed = parseFloat(els.stageSpeed.value) || 1;
+      if (App.stage.previewFullscreen) exitStageFullscreenPreview();
+      else enterStageFullscreenPreview();
     });
   }
 
+  if (els.stageSpeed) {
+    els.stageSpeed.addEventListener('input', () => {
+      const pct = parseFloat(els.stageSpeed.value) || 100;
+      App.stage.speed = clamp(pct / 100, 0.1, 4);
+      if (els.stageSpeedValue) {
+        els.stageSpeedValue.textContent = App.stage.speed.toFixed(1) + '×';
+      }
+    });
+  }
+
+  // Ползунки адаптивного растягивания экрана (в пикселях, относительно базового 1366×768)
   function onRubberSliderInput() {
+    if (els.stageRubberW) App.stage.testWidth  = parseFloat(els.stageRubberW.value) || null;
+    if (els.stageRubberH) App.stage.testHeight = parseFloat(els.stageRubberH.value) || null;
     renderStageBackground();
     syncAllStageTransforms();
     updateStageSelSize();
     syncStageInspectorLive();
+    renderStageRulersAndGuides();
     StageGizmo.render();
   }
   if (els.stageRubberW) els.stageRubberW.addEventListener('input', onRubberSliderInput);
   if (els.stageRubberH) els.stageRubberH.addEventListener('input', onRubberSliderInput);
   if (els.stageRubberReset) {
     els.stageRubberReset.addEventListener('click', () => {
-      if (els.stageRubberW) els.stageRubberW.value = '100';
-      if (els.stageRubberH) els.stageRubberH.value = '100';
-      onRubberSliderInput();
+      syncStageRubberSlidersToBase();
+      renderStageBackground();
+      syncAllStageTransforms();
+      updateStageSelSize();
+      syncStageInspectorLive();
+      renderStageRulersAndGuides();
+      StageGizmo.render();
     });
   }
 
-  // Курсор Ctrl+Drag во вьюпорте сцены
+  // Если пользователь вышел из системного Fullscreen клавишей ESC браузера — синхронизируем выход
+  if (typeof document !== 'undefined') {
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && App.stage.previewFullscreen) {
+        exitStageFullscreenPreview();
+      }
+    });
+  }
+
+  window.addEventListener('resize', () => {
+    if (App.stage.previewFullscreen) {
+      fitStagePreviewFullscreenCamera();
+    } else if (App.editorMode === 'stage') {
+      renderStageRulersAndGuides();
+    }
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Control' || e.key === 'Meta') {
       App.ctrlDown = true;
-      if (App.editorMode === 'stage' && els.viewport) {
+      if (App.editorMode === 'stage' && els.viewport && !App.stage.previewFullscreen) {
         els.viewport.classList.add('ctrl-drag-ready');
       }
     }
@@ -3518,3 +4367,9 @@ function setupStageEditor() {
     if (els.viewport) els.viewport.classList.remove('ctrl-drag-ready');
   });
 }
+
+App.Stage = {
+  renderStageRulersAndGuides,
+  enterStageFullscreenPreview,
+  exitStageFullscreenPreview
+};

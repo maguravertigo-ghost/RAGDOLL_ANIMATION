@@ -4,7 +4,7 @@
 //  app.js — глобальное состояние App, кэш DOM, математика матриц и модалки
 // ============================================================
 
-const APP_VERSION = 'v0.4.0';
+const APP_VERSION = 'v0.5.0';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const $  = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -64,12 +64,19 @@ const App = {
     _suppressDirty: false,
     camera:       { x: 0, y: 0, zoom: 0.65 },
     playing:      false,
+    previewFullscreen: false,
+    savedCameraBeforePreview: null,
     raf:          null,
     lastTs:       0,
     time:         0,
     speed:        1,
     fpsSamples:   [],
     clipFrame:    false,
+    showRulers:   true,
+    guideSnap:    true,
+    activeSnapGuides: [],
+    barCollapsed: false,
+    bgPropsExpanded: false,
     testWidth:    null,
     testHeight:   null,
     _selectedModalName: null,
@@ -170,7 +177,7 @@ function cacheEls() {
   els.stageNameGroup       = $('#stage-name-group');
   els.stageName            = $('#stage-name');
   els.btnStageInlineRename = $('#btn-stage-inline-rename');
-  els.btnStageFit          = $('#btn-stage-fit');
+  els.btnStageFit          = $('#btn-stage-bg-quick');
   els.stageResLabel        = $('#stage-res-label');
 
   els.btnStorageStatus   = $('#btn-storage-status');
@@ -188,8 +195,16 @@ function cacheEls() {
   els.stageRoot         = $('#stage-root');
   els.onion             = $('#onion');
   els.scene             = $('#scene');
+  els.stageGuidesSvg    = $('#stage-guides-svg');
   els.gizmoSvg          = $('#gizmo-svg');
   els.stageGizmoSvg     = $('#stage-gizmo-svg');
+  els.stageRulerCorner  = $('#stage-ruler-corner');
+  els.stageRulerH       = $('#stage-ruler-h');
+  els.stageRulerHCanvas = $('#stage-ruler-h-canvas');
+  els.stageRulerHairX   = $('#stage-ruler-hair-x');
+  els.stageRulerV       = $('#stage-ruler-v');
+  els.stageRulerVCanvas = $('#stage-ruler-v-canvas');
+  els.stageRulerHairY   = $('#stage-ruler-hair-y');
 
   // Tools row
   els.zoomLabel         = $('#zoom-label');
@@ -199,9 +214,12 @@ function cacheEls() {
   els.btnRealtime       = $('#btn-realtime');
   els.btnResetAnim      = $('#btn-reset-anim');
   els.btnPresets        = $('#btn-presets');
+  els.btnStageRulers    = $('#btn-stage-rulers');
+  els.btnStageGuideSnap = $('#btn-stage-guide-snap');
+  els.btnStageAddObj    = $('#btn-stage-add-obj');
   els.btnStageClip      = $('#btn-stage-clip');
-  els.btnStageCenter    = $('#btn-stage-center');
-  els.stageHintDrag     = $('#stage-hint-drag');
+  els.btnStagePlayTop   = $('#btn-stage-play-top');
+  els.stageHintDrag     = $('#stage-ctrl-hint');
   els.stageFpsBadge     = $('#stage-fps-badge');
   els.btnBg             = $('#btn-bg');
   els.fpsSlider         = $('#fps-slider');
@@ -209,6 +227,8 @@ function cacheEls() {
   els.selSize           = $('#sel-size');
   els.btnTimelineToggle = $('#btn-timeline-toggle');
   els.timelineToggleIcon = $('#timeline-toggle-icon');
+  els.btnStageBarToggle = $('#btn-stage-bar-toggle');
+  els.stageBarToggleIcon = $('#stage-bar-toggle-icon');
 
   // Playback row
   els.playbackBar       = $('#playback-bar');
@@ -235,11 +255,11 @@ function cacheEls() {
 
   // Stage preview & rubber screen bar
   els.stageBar          = $('#stage-bar');
-  els.stagePlay         = $('#stage-play');
+  els.stagePlay         = $('#stage-play-btn');
   els.stagePlayIcon     = $('#stage-play-icon');
   els.stagePlayLabel    = $('#stage-play-label');
-  els.stageStop         = $('#stage-stop');
-  els.stageSpeed        = $('#stage-speed');
+  els.stageSpeed        = $('#stage-speed-slider');
+  els.stageSpeedValue   = $('#stage-speed-value');
   els.stageRubberW      = $('#stage-rubber-w');
   els.stageRubberH      = $('#stage-rubber-h');
   els.stageRubberReset  = $('#stage-rubber-reset');
@@ -255,14 +275,16 @@ function cacheEls() {
   els.tlPlayheadLine    = $('#tl-playhead-line');
 
   // Right panel (Layers & Properties)
-  els.layersHeaderTitle    = $('#layers-header-title');
+  els.layersHeaderTitle    = $('#layers-panel-title');
   els.layersActionsObject  = $('#layers-actions-object');
   els.layersActionsStage   = $('#layers-actions-stage');
   els.btnGroup          = $('#btn-group');
   els.btnUngroup        = $('#btn-ungroup');
-  els.btnStageAddLayer  = $('#btn-stage-add-layer');
-  els.btnStageAddFolder = $('#btn-stage-add-folder');
-  els.btnStageDelLayer  = $('#btn-stage-del-layer');
+  els.btnStageAddLayer  = $('#btn-stage-layer-add');
+  els.btnStageAddFolder = $('#btn-stage-folder-add');
+  els.btnStageUngroup   = $('#btn-stage-folder-ungroup');
+  els.btnStageCloneLayer = $('#btn-stage-layer-clone');
+  els.btnStageDelLayer  = $('#btn-stage-layer-del');
   els.layersList        = $('#layers-list');
   els.stageLayersList   = $('#stage-layers-list');
   els.stageFileInput    = $('#stage-file-input');
@@ -274,6 +296,9 @@ function cacheEls() {
   // Modals
   els.modalStages        = $('#modal-stages');
   els.modalStagesX       = $('#modal-stages-x');
+  els.stagesSourceText   = $('#stages-source-text');
+  els.stagesBtnReconnect = $('#stages-btn-reconnect');
+  els.stagesBtnPick      = $('#stages-btn-pick');
   els.stagesList         = $('#stages-list');
   els.stageAdd           = $('#stage-add');
   els.stageClone         = $('#stage-clone');
@@ -287,9 +312,9 @@ function cacheEls() {
   els.stagePickTabObj    = $('#stage-pick-tab-obj');
   els.stagePickTabAsset  = $('#stage-pick-tab-asset');
   els.stagePickList      = $('#stage-pick-list');
-  els.stagePickUpload    = $('#stage-pick-upload');
+  els.stagePickUpload    = $('#stage-pick-upload-btn');
   els.stagePickCancel    = $('#stage-pick-cancel');
-  els.stagePickAdd       = $('#stage-pick-add');
+  els.stagePickAdd       = $('#stage-pick-ok');
   els.modalObjects       = $('#modal-objects');
   els.modalObjectsX      = $('#modal-objects-x');
   els.objectsSourceBar   = $('#objects-source-bar');

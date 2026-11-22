@@ -327,6 +327,7 @@ function applyCamera() {
   rebuildGrid();
   if (App.editorMode === 'stage') {
     if (typeof StageGizmo !== 'undefined') StageGizmo.render();
+    if (typeof renderStageRulersAndGuides === 'function') renderStageRulersAndGuides();
   } else {
     Gizmo.render();
     if (!App.selectedId) renderProperties();
