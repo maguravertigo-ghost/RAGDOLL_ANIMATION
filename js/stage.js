@@ -1553,6 +1553,12 @@ function renderStageRulersCanvas(metrics) {
 
 const GUIDE_HIT_BAND = 12;
 
+function setSvgOverlayVisible(svgEl, show) {
+  if (!svgEl) return;
+  svgEl.removeAttribute('hidden');
+  svgEl.style.display = show ? 'block' : 'none';
+}
+
 function getStageGuideStyle() {
   const gs = (App.stage.data && App.stage.data.guideStyle) || {};
   return {
@@ -1598,11 +1604,14 @@ function renderStageGuidesOverlay(metrics) {
   svg.innerHTML = '';
   const show = (App.editorMode === 'stage') && !!App.stage.showRulers &&
     !App.stage.previewFullscreen && !!App.stage.data;
-  svg.hidden = !show;
+  setSvgOverlayVisible(svg, show);
   if (!show) return;
 
   const vpW = els.viewport.clientWidth || 800;
   const vpH = els.viewport.clientHeight || 500;
+  svg.setAttribute('width', String(vpW));
+  svg.setAttribute('height', String(vpH));
+  svg.setAttribute('viewBox', '0 0 ' + vpW + ' ' + vpH);
   const m = metrics || getStageFrameMetrics();
   const guides = App.stage.data.guides || [];
   const activeSnapSet = new Set(App.stage.activeSnapGuides || []);
@@ -1619,6 +1628,10 @@ function renderStageGuidesOverlay(metrics) {
     const willDelete   = !!(isDragging && _guideDrag.willDelete);
     const isSnapped    = activeSnapSet.has(g.id);
     const isHovered    = !isDragging && App.stage.hoveredGuideId === g.id;
+
+    const shadow = document.createElementNS(SVG_NS, 'line');
+    shadow.setAttribute('class', 'stage-guide-shadow');
+    shadow.style.strokeOpacity = String(isDragging || isSnapped || isHovered ? 0.85 : Math.min(0.75, style.opacity * 0.75));
 
     const line = document.createElementNS(SVG_NS, 'line');
     const hit  = document.createElementNS(SVG_NS, 'rect');
@@ -1638,6 +1651,10 @@ function renderStageGuidesOverlay(metrics) {
 
     if (g.axis === 'v') {
       const x = Math.round(scr.x) + 0.5;
+      shadow.setAttribute('x1', String(x));
+      shadow.setAttribute('y1', '0');
+      shadow.setAttribute('x2', String(x));
+      shadow.setAttribute('y2', String(vpH));
       line.setAttribute('x1', String(x));
       line.setAttribute('y1', '0');
       line.setAttribute('x2', String(x));
@@ -1649,6 +1666,10 @@ function renderStageGuidesOverlay(metrics) {
       hit.setAttribute('height', String(Math.max(1, vpH - RULER_THICK)));
     } else {
       const y = Math.round(scr.y) + 0.5;
+      shadow.setAttribute('x1', '0');
+      shadow.setAttribute('y1', String(y));
+      shadow.setAttribute('x2', String(vpW));
+      shadow.setAttribute('y2', String(y));
       line.setAttribute('x1', '0');
       line.setAttribute('y1', String(y));
       line.setAttribute('x2', String(vpW));
@@ -1660,6 +1681,7 @@ function renderStageGuidesOverlay(metrics) {
       hit.setAttribute('height', String(GUIDE_HIT_BAND));
     }
 
+    svg.appendChild(shadow);
     svg.appendChild(line);
     svg.appendChild(hit);
 
@@ -1695,15 +1717,15 @@ function renderStageRulersAndGuides() {
   renderStageGuidesOverlay(m);
 }
 
-// Вычисляет смещение привязки к направляющим (по границе Bounding Box ИЛИ по единому Pivot Point)
+// Вычисляет смещение привязки к направляющим (по краям рамки Bounding Box ИЛИ по единому Pivot Point)
 function computeGuideSnapAdjustment(snapshots, dwx, dwy, metrics) {
   App.stage.activeSnapGuides = [];
-  if (!App.stage.guideSnap || !App.stage.showRulers || !App.stage.data) {
-    return { dwx, dwy, snappedX: false, snappedY: false };
+  if (!App.stage.guideSnap || !App.stage.data) {
+    return { dwx, dwy, snappedX: false, snappedY: false, edgeX: null, edgeY: null };
   }
   const guides = App.stage.data.guides || [];
   if (!guides.length || !snapshots.length) {
-    return { dwx, dwy, snappedX: false, snappedY: false };
+    return { dwx, dwy, snappedX: false, snappedY: false, edgeX: null, edgeY: null };
   }
 
   let candMinX = Infinity, candMinY = Infinity, candMaxX = -Infinity, candMaxY = -Infinity;
@@ -1717,42 +1739,47 @@ function computeGuideSnapAdjustment(snapshots, dwx, dwy, metrics) {
     if (b.maxY > candMaxY) candMaxY = b.maxY;
   }
 
-  // Точки привязки по X и Y: границы Bounding Box (лево/право, верх/низ) И единый Pivot Point
-  const xPoints = [candMinX, candMaxX];
-  const yPoints = [candMinY, candMaxY];
-  if (snapshots.length === 1) {
-    xPoints.unshift(snapshots[0].wpos0.x + dwx);
-    yPoints.unshift(snapshots[0].wpos0.y + dwy);
-  } else {
-    xPoints.unshift((candMinX + candMaxX) / 2);
-    yPoints.unshift((candMinY + candMaxY) / 2);
-  }
+  // Точки привязки по X и Y: края рамки Bounding Box (лево/право, верх/низ) И единый Pivot Point
+  const pivX = snapshots.length === 1 ? (snapshots[0].wpos0.x + dwx) : ((candMinX + candMaxX) / 2);
+  const pivY = snapshots.length === 1 ? (snapshots[0].wpos0.y + dwy) : ((candMinY + candMaxY) / 2);
+  const xPoints = [
+    { val: candMinX, kind: 'left' },
+    { val: candMaxX, kind: 'right' },
+    { val: pivX,     kind: 'pivot' }
+  ];
+  const yPoints = [
+    { val: candMinY, kind: 'top' },
+    { val: candMaxY, kind: 'bottom' },
+    { val: pivY,     kind: 'pivot' }
+  ];
 
-  const threshWorld = 9 / Math.max(0.05, App.camera.zoom || 1);
-  let bestDx = null, bestAbsX = threshWorld, bestGuideX = null;
-  let bestDy = null, bestAbsY = threshWorld, bestGuideY = null;
+  const threshWorld = 12 / Math.max(0.05, App.camera.zoom || 1);
+  let bestDx = null, bestAbsX = threshWorld, bestGuideX = null, bestEdgeX = null;
+  let bestDy = null, bestAbsY = threshWorld, bestGuideY = null, bestEdgeY = null;
 
   for (let i = 0; i < guides.length; i++) {
     const g = guides[i];
     const gw = guideToWorldCoord(g, metrics);
     if (g.axis === 'v') {
       for (let k = 0; k < xPoints.length; k++) {
-        const diff = gw - xPoints[k];
+        const diff = gw - xPoints[k].val;
         const ad = Math.abs(diff);
         if (ad <= bestAbsX) {
           bestAbsX = ad;
           bestDx = diff;
           bestGuideX = g.id;
+          bestEdgeX = xPoints[k].kind;
         }
       }
     } else {
       for (let k = 0; k < yPoints.length; k++) {
-        const diff = gw - yPoints[k];
+        const diff = gw - yPoints[k].val;
         const ad = Math.abs(diff);
         if (ad <= bestAbsY) {
           bestAbsY = ad;
           bestDy = diff;
           bestGuideY = g.id;
+          bestEdgeY = yPoints[k].kind;
         }
       }
     }
@@ -1771,7 +1798,121 @@ function computeGuideSnapAdjustment(snapshots, dwx, dwy, metrics) {
     dwx: outDwx,
     dwy: outDwy,
     snappedX: bestDx !== null,
-    snappedY: bestDy !== null
+    snappedY: bestDy !== null,
+    edgeX: bestEdgeX,
+    edgeY: bestEdgeY
+  };
+}
+
+// Магнитная привязка объекта к сетке по краям рамки Bounding Box (лево/право/верх/низ) И единому Pivot Point
+function computeStageGridSnapAdjustment(snapshots, dwx, dwy, skipX, skipY, metrics) {
+  App.stage.activeGridSnapLines = [];
+  if (!App.grid.snap || !snapshots.length) {
+    return { dwx, dwy, snappedX: false, snappedY: false, edgeX: null, edgeY: null };
+  }
+
+  let candMinX = Infinity, candMinY = Infinity, candMaxX = -Infinity, candMaxY = -Infinity;
+  for (let i = 0; i < snapshots.length; i++) {
+    const snap = snapshots[i];
+    const candPos = { x: snap.wpos0.x + dwx, y: snap.wpos0.y + dwy };
+    const b = getStageItemWorldAABBAtPos(snap.item, candPos, metrics);
+    if (b.minX < candMinX) candMinX = b.minX;
+    if (b.minY < candMinY) candMinY = b.minY;
+    if (b.maxX > candMaxX) candMaxX = b.maxX;
+    if (b.maxY > candMaxY) candMaxY = b.maxY;
+  }
+
+  const pivX = snapshots.length === 1 ? (snapshots[0].wpos0.x + dwx) : ((candMinX + candMaxX) / 2);
+  const pivY = snapshots.length === 1 ? (snapshots[0].wpos0.y + dwy) : ((candMinY + candMaxY) / 2);
+
+  const z = Math.max(0.05, App.camera.zoom || 1);
+  const baseStep = Math.max(1, Number(App.grid.step) || 4);
+  let drawStep = baseStep;
+  while (drawStep * z < 2.0 && drawStep < 4096) drawStep *= 4;
+  const rawMajor = (App.grid && App.grid.majorEvery !== undefined) ? Number(App.grid.majorEvery) : 5;
+  const majorEvery = rawMajor > 0 ? Math.max(2, Math.round(rawMajor)) : 0;
+  // Если мелкая волосяная ячейка на текущем зуме мельче 10 экранных px — липнем к видимым крупным клеткам сетки
+  const snapStep = (drawStep * z < 10 && majorEvery > 0) ? (drawStep * majorEvery) : drawStep;
+  const origin = (typeof App.getGridOrigin === 'function') ? App.getGridOrigin() : { x: 0, y: 0 };
+  const thresh = Math.min(11 / z, snapStep * 0.46);
+
+  const xPoints = [
+    { val: candMinX, kind: 'left' },
+    { val: candMaxX, kind: 'right' },
+    { val: pivX,     kind: 'pivot' }
+  ];
+  const yPoints = [
+    { val: candMinY, kind: 'top' },
+    { val: candMaxY, kind: 'bottom' },
+    { val: pivY,     kind: 'pivot' }
+  ];
+
+  let bestDx = null, bestAbsX = thresh, bestCoordX = null, bestEdgeX = null;
+  if (!skipX) {
+    for (let k = 0; k < xPoints.length; k++) {
+      const v = xPoints[k].val;
+      const gx = origin.x + Math.round((v - origin.x) / snapStep) * snapStep;
+      const diff = gx - v;
+      const ad = Math.abs(diff);
+      if (ad <= bestAbsX) {
+        bestAbsX = ad;
+        bestDx = diff;
+        bestCoordX = gx;
+        bestEdgeX = xPoints[k].kind;
+      }
+      if (App.grid.showCrosshair) {
+        const diff0 = 0 - v;
+        if (Math.abs(diff0) <= bestAbsX) {
+          bestAbsX = Math.abs(diff0);
+          bestDx = diff0;
+          bestCoordX = 0;
+          bestEdgeX = xPoints[k].kind;
+        }
+      }
+    }
+  }
+
+  let bestDy = null, bestAbsY = thresh, bestCoordY = null, bestEdgeY = null;
+  if (!skipY) {
+    for (let k = 0; k < yPoints.length; k++) {
+      const v = yPoints[k].val;
+      const gy = origin.y + Math.round((v - origin.y) / snapStep) * snapStep;
+      const diff = gy - v;
+      const ad = Math.abs(diff);
+      if (ad <= bestAbsY) {
+        bestAbsY = ad;
+        bestDy = diff;
+        bestCoordY = gy;
+        bestEdgeY = yPoints[k].kind;
+      }
+      if (App.grid.showCrosshair) {
+        const diff0 = 0 - v;
+        if (Math.abs(diff0) <= bestAbsY) {
+          bestAbsY = Math.abs(diff0);
+          bestDy = diff0;
+          bestCoordY = 0;
+          bestEdgeY = yPoints[k].kind;
+        }
+      }
+    }
+  }
+
+  let outDwx = dwx, outDwy = dwy;
+  if (bestDx !== null) {
+    outDwx += bestDx;
+    App.stage.activeGridSnapLines.push({ axis: 'v', coord: bestCoordX });
+  }
+  if (bestDy !== null) {
+    outDwy += bestDy;
+    App.stage.activeGridSnapLines.push({ axis: 'h', coord: bestCoordY });
+  }
+  return {
+    dwx: outDwx,
+    dwy: outDwy,
+    snappedX: bestDx !== null,
+    snappedY: bestDy !== null,
+    edgeX: bestEdgeX,
+    edgeY: bestEdgeY
   };
 }
 
@@ -1962,8 +2103,12 @@ function renderGuidesSettingsPopover() {
         addG('v', 0.05); addG('v', 0.95);
         addG('h', 0.05); addG('h', 0.95);
       }
+      if (!App.stage.showRulers) {
+        App.stage.showRulers = true;
+        if (els.btnStageRulers) els.btnStageRulers.classList.add('active');
+      }
       markStageDirty();
-      renderStageGuidesOverlay();
+      renderStageRulersAndGuides();
       if (App.stage.selectedId === '__bg__') renderStageProperties();
       renderGuidesSettingsPopover();
     });
@@ -2179,11 +2324,56 @@ const StageGizmo = (function () {
     return el;
   }
 
+  function drawSnapIndicatorsAndEdges(svg, boxBoundsScr) {
+    const vpW = els.viewport ? (els.viewport.clientWidth || 800) : 800;
+    const vpH = els.viewport ? (els.viewport.clientHeight || 500) : 500;
+
+    // 1) Линии срабатывания привязки к сетке
+    const gridLines = App.stage.activeGridSnapLines || [];
+    for (let i = 0; i < gridLines.length; i++) {
+      const gl = gridLines[i];
+      const scr = worldToViewportScreen(gl.axis === 'v' ? gl.coord : 0, gl.axis === 'h' ? gl.coord : 0);
+      if (gl.axis === 'v') {
+        const x = Math.round(scr.x) + 0.5;
+        svg.appendChild(makeSvg('line', { x1: x, y1: 0, x2: x, y2: vpH, class: 'stage-grid-snap-line' }));
+      } else {
+        const y = Math.round(scr.y) + 0.5;
+        svg.appendChild(makeSvg('line', { x1: 0, y1: y, x2: vpW, y2: y, class: 'stage-grid-snap-line' }));
+      }
+    }
+
+    // 2) Подсветка грани рамки объекта, которая примагнитилась к направляющей или сетке
+    const se = App.stage.activeSnapEdges;
+    if (!se || !boxBoundsScr) return;
+    const { minX, minY, maxX, maxY } = boxBoundsScr;
+    if (se.x && (se.x.kind === 'left' || se.x.kind === 'right')) {
+      const sx = se.x.kind === 'left' ? minX : maxX;
+      svg.appendChild(makeSvg('line', {
+        x1: sx, y1: minY, x2: sx, y2: maxY,
+        class: 'stage-gizmo-snap-edge' + (se.x.source === 'grid' ? ' grid-edge' : '')
+      }));
+    }
+    if (se.y && (se.y.kind === 'top' || se.y.kind === 'bottom')) {
+      const sy = se.y.kind === 'top' ? minY : maxY;
+      svg.appendChild(makeSvg('line', {
+        x1: minX, y1: sy, x2: maxX, y2: sy,
+        class: 'stage-gizmo-snap-edge' + (se.y.source === 'grid' ? ' grid-edge' : '')
+      }));
+    }
+  }
+
   function render() {
     const svg = els.stageGizmoSvg;
     if (!svg) return;
     svg.innerHTML = '';
-    if (App.editorMode !== 'stage' || !App.stage.data || App.stage.previewFullscreen) return;
+    const activeStage = (App.editorMode === 'stage' && !!App.stage.data && !App.stage.previewFullscreen);
+    setSvgOverlayVisible(svg, activeStage);
+    if (!activeStage) return;
+    const vpW = els.viewport ? (els.viewport.clientWidth || 800) : 800;
+    const vpH = els.viewport ? (els.viewport.clientHeight || 500) : 500;
+    svg.setAttribute('width', String(vpW));
+    svg.setAttribute('height', String(vpH));
+    svg.setAttribute('viewBox', '0 0 ' + vpW + ' ' + vpH);
 
     if (drag && drag.kind === 'marquee') {
       const x = Math.min(drag.sx0, drag.sx1);
@@ -2303,12 +2493,15 @@ const StageGizmo = (function () {
         svg.appendChild(eh);
       }
 
-      // Компактный шильдик габаритов BBox (Ш × В px) под рамкой
+      // Компактный шильдик имени объекта в фокусе и габаритов BBox (Ш × В px) под рамкой
       const scrMinX = Math.min(pts[0].x, pts[1].x, pts[2].x, pts[3].x);
       const scrMaxX = Math.max(pts[0].x, pts[1].x, pts[2].x, pts[3].x);
+      const scrMinY = Math.min(pts[0].y, pts[1].y, pts[2].y, pts[3].y);
       const scrMaxY = Math.max(pts[0].y, pts[1].y, pts[2].y, pts[3].y);
-      const dimTxt = Math.round(aabb.maxX - aabb.minX) + ' × ' + Math.round(aabb.maxY - aabb.minY) + ' px';
-      const dimW = Math.max(76, dimTxt.length * 6.3 + 12);
+      drawSnapIndicatorsAndEdges(svg, { minX: scrMinX, minY: scrMinY, maxX: scrMaxX, maxY: scrMaxY });
+
+      const dimTxt = (it.label || it.id) + ' · ' + Math.round(aabb.maxX - aabb.minX) + '×' + Math.round(aabb.maxY - aabb.minY);
+      const dimW = Math.max(84, dimTxt.length * 6.5 + 14);
       const dimX = (scrMinX + scrMaxX) / 2 - dimW / 2;
       const dimY = scrMaxY + 8;
       svg.appendChild(makeSvg('rect', {
@@ -2412,6 +2605,8 @@ const StageGizmo = (function () {
     gBox.dataset.gizmo = 'group-move';
     svg.appendChild(gBox);
 
+    drawSnapIndicatorsAndEdges(svg, { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh });
+
     const gCorners = [
       { idx: 0, x: gx,      y: gy },
       { idx: 1, x: gx + gw, y: gy },
@@ -2486,21 +2681,24 @@ const StageGizmo = (function () {
     let dwx = dwxRaw;
     let dwy = dwyRaw;
 
-    // 1) Привязка к направляющим по границам Bounding Box ИЛИ единому Pivot Point
+    // 1) Магнитная привязка к направляющим по краям рамки Bounding Box ИЛИ единому Pivot Point
     const gSnap = computeGuideSnapAdjustment(drag.snapshots, dwx, dwy, metrics);
     dwx = gSnap.dwx;
     dwy = gSnap.dwy;
 
-    // 2) Привязка к сетке по не привязанным к направляющим осям (с учётом шага и начала координат сетки)
-    if (App.grid.snap && drag.snapshots.length > 0) {
-      const ref0 = drag.snapshots[0].wpos0;
-      const cand = { x: ref0.x + dwx, y: ref0.y + dwy };
-      const snapped = (typeof App.snapWorldToGrid === 'function')
-        ? App.snapWorldToGrid(cand.x, cand.y)
-        : { x: Math.round(cand.x / (App.grid.step || 4)) * (App.grid.step || 4), y: Math.round(cand.y / (App.grid.step || 4)) * (App.grid.step || 4) };
-      if (!gSnap.snappedX) dwx += (snapped.x - cand.x);
-      if (!gSnap.snappedY) dwy += (snapped.y - cand.y);
-    }
+    // 2) Магнитная привязка к сетке по краям рамки Bounding Box ИЛИ единому Pivot Point (по не занятым осям)
+    const grSnap = computeStageGridSnapAdjustment(
+      drag.snapshots, dwx, dwy, gSnap.snappedX, gSnap.snappedY, metrics
+    );
+    dwx = grSnap.dwx;
+    dwy = grSnap.dwy;
+
+    App.stage.activeSnapEdges = {
+      x: gSnap.snappedX ? { kind: gSnap.edgeX, source: 'guide' }
+        : (grSnap.snappedX ? { kind: grSnap.edgeX, source: 'grid' } : null),
+      y: gSnap.snappedY ? { kind: gSnap.edgeY, source: 'guide' }
+        : (grSnap.snappedY ? { kind: grSnap.edgeY, source: 'grid' } : null)
+    };
 
     for (const snap of drag.snapshots) {
       const nx = snap.wpos0.x + dwx;
@@ -2513,12 +2711,6 @@ const StageGizmo = (function () {
 
   function onGizmoMouseDown(e) {
     if (App.editorMode !== 'stage' || e.button !== 0 || App.spaceDown || App.stage.previewFullscreen) return;
-    // Если клик попал прямо на направляющую — приоритет у перетаскивания направляющей
-    const nearGuide = findStageGuideNearClient(e.clientX, e.clientY, 6);
-    if (nearGuide) {
-      startExistingGuideDrag(nearGuide, e);
-      return;
-    }
     const target = e.target && e.target.closest ? e.target.closest('[data-gizmo]') : null;
     if (!target) return;
 
@@ -2737,6 +2929,11 @@ const StageGizmo = (function () {
     if (App.stage.activeSnapGuides && App.stage.activeSnapGuides.length) {
       App.stage.activeSnapGuides = [];
       renderStageGuidesOverlay();
+    }
+    if ((App.stage.activeGridSnapLines && App.stage.activeGridSnapLines.length) || App.stage.activeSnapEdges) {
+      App.stage.activeGridSnapLines = [];
+      App.stage.activeSnapEdges = null;
+      render();
     }
 
     if (d.kind === 'marquee') {
@@ -4301,14 +4498,18 @@ function renderStageProperties() {
     });
 
     props.querySelector('#sprop-guide-center').addEventListener('click', () => {
-      st.guides.push(
-        { id: nextStageGuideId(), axis: 'v', pos: 0.5 }
-      );
-      st.guides.push(
-        { id: nextStageGuideId(), axis: 'h', pos: 0.5 }
-      );
+      if (!st.guides.some(g => g.axis === 'v' && Math.abs(g.pos - 0.5) < 0.0005)) {
+        st.guides.push({ id: nextStageGuideId(), axis: 'v', pos: 0.5 });
+      }
+      if (!st.guides.some(g => g.axis === 'h' && Math.abs(g.pos - 0.5) < 0.0005)) {
+        st.guides.push({ id: nextStageGuideId(), axis: 'h', pos: 0.5 });
+      }
+      if (!App.stage.showRulers) {
+        App.stage.showRulers = true;
+        if (els.btnStageRulers) els.btnStageRulers.classList.add('active');
+      }
       markStageDirty();
-      renderStageGuidesOverlay();
+      renderStageRulersAndGuides();
       renderStageProperties();
     });
 
@@ -5380,15 +5581,16 @@ async function setEditorMode(nextMode) {
   if (els.headerObjectControls) els.headerObjectControls.hidden = toStage;
   if (els.headerStageControls)  els.headerStageControls.hidden  = !toStage;
 
-  // Вьюпорт, линейки, направляющие и оверлеи Gizmo
+  // Вьюпорт, линейки, направляющие и оверлеи Gizmo (без hidden на <svg>, т.к. SVGElement не снимает атрибут [hidden])
   if (els.scene)         els.scene.style.display = toStage ? 'none' : '';
   if (els.onion)         els.onion.style.display = toStage ? 'none' : '';
-  if (els.gizmoSvg)      els.gizmoSvg.hidden = toStage;
+  setSvgOverlayVisible(els.gizmoSvg, !toStage);
   if (els.stageRoot) {
     els.stageRoot.removeAttribute('hidden');
     els.stageRoot.style.display = toStage ? '' : 'none';
   }
-  if (els.stageGizmoSvg) els.stageGizmoSvg.hidden = !toStage;
+  setSvgOverlayVisible(els.stageGizmoSvg, toStage);
+  setSvgOverlayVisible(els.stageGuidesSvg, toStage && !!App.stage.showRulers);
 
   // В режиме Сцены полностью скрываем ключевой таймлайн и полосу воспроизведения объекта
   $$('.obj-mode-only').forEach(el => { el.hidden = toStage; });
