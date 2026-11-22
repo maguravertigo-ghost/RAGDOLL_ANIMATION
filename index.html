@@ -4,19 +4,30 @@
 <meta charset="UTF-8">
 <title>Animation Editor</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
   <header>
     <span class="brand">Animation Editor</span>
+    <span class="app-version" id="app-version">v0.3.0</span>
     <button class="icon-btn" id="btn-objects" title="Открыть объект">
       <span class="material-icons">folder_open</span>
     </button>
-    <input class="name-field" id="obj-name" readonly placeholder="объект не выбран">
+    <div class="header-name-group" id="obj-name-group">
+      <input class="name-field" id="obj-name" readonly tabindex="-1" placeholder="объект не выбран" autocomplete="off" spellcheck="false">
+      <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-obj-inline-rename" type="button" title="Переименовать объект">
+        <span class="material-icons">edit</span>
+      </button>
+    </div>
     <button class="icon-btn" id="btn-anim" title="Анимация">
       <span class="material-icons">animation</span>
     </button>
-    <input class="name-field" id="anim-name" readonly placeholder="—">
+    <div class="header-name-group" id="anim-name-group">
+      <input class="name-field" id="anim-name" readonly tabindex="-1" placeholder="—" autocomplete="off" spellcheck="false">
+      <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-anim-inline-rename" type="button" title="Переименовать анимацию">
+        <span class="material-icons">edit</span>
+      </button>
+    </div>
     <span class="spacer"></span>
     <button class="storage-chip" id="btn-storage-status" title="Источник проектов (нажмите для настройки)">
       <span class="storage-dot" id="storage-dot"></span>
@@ -48,6 +59,32 @@
 	  <button class="icon-btn" data-act="zoom-in"  title="Масштаб +"><span class="material-icons">add</span></button>
 	  <button class="icon-btn" data-act="zoom-fit" title="Вписать в фрэйм"><span class="material-icons">fit_screen</span></button>
 	  <span class="zoom-label" id="zoom-label">100%</span>
+
+	  <span class="sep"></span>
+	  <button class="icon-btn active" id="btn-crosshair" title="Крест сцены (центральные оси X/Y): вкл/выкл">
+		<svg class="svg-icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+		  <line x1="9" y1="2" x2="9" y2="16"></line>
+		  <line x1="2" y1="9" x2="16" y2="9"></line>
+		  <circle cx="9" cy="9" r="2.5"></circle>
+		</svg>
+	  </button>
+	  <button class="icon-btn active" id="btn-grid" title="Сетка сцены (опорная волосяная сетка): вкл/выкл">
+		<svg class="svg-icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.3">
+		  <rect x="2.5" y="2.5" width="13" height="13" rx="1"></rect>
+		  <line x1="6.8" y1="2.5" x2="6.8" y2="15.5"></line>
+		  <line x1="11.2" y1="2.5" x2="11.2" y2="15.5"></line>
+		  <line x1="2.5" y1="6.8" x2="15.5" y2="6.8"></line>
+		  <line x1="2.5" y1="11.2" x2="15.5" y2="11.2"></line>
+		</svg>
+	  </button>
+	  <button class="icon-btn" id="btn-snap" title="Привязка к сетке (по Pivot Point слоя): вкл/выкл">
+		<svg class="svg-icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+		  <path d="M5 3.5v4.5a4 4 0 0 0 8 0V3.5"></path>
+		  <line x1="3.8" y1="3.5" x2="6.2" y2="3.5"></line>
+		  <line x1="11.8" y1="3.5" x2="14.2" y2="3.5"></line>
+		  <circle cx="9" cy="14.5" r="1.2" fill="currentColor" stroke="none"></circle>
+		</svg>
+	  </button>
 
 	  <span class="sep"></span>
 	  <button class="icon-btn mode-btn" data-mode="1" title="Режим: масштаб / перемещение">
@@ -193,7 +230,7 @@
   </main>
 
   <div class="modal" id="modal-objects" hidden>
-    <div class="modal-box">
+    <div class="modal-box modal-box-objects">
       <div class="modal-title modal-title-flex">
         <span>Открыть объект</span>
         <button class="icon-btn icon-btn-sm" id="modal-objects-x" title="Закрыть">
@@ -207,8 +244,27 @@
           <button type="button" class="btn-sm" id="objects-btn-pick">Локальная папка…</button>
         </div>
       </div>
-      <ul id="objects-list"></ul>
-      <div class="modal-actions"><button id="modal-objects-close">Закрыть</button></div>
+      <ul id="objects-list" class="list-theme-blue"></ul>
+      <div class="modal-actions modal-actions-split">
+        <div class="modal-actions-left">
+          <button class="icon-btn icon-btn-sm" id="obj-add" title="Создать новый объект (untitled_0…)">
+            <span class="material-icons">add</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="obj-clone" title="Клонировать выбранный объект (_clone_0…)">
+            <span class="material-icons">content_copy</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="obj-rename" title="Переименовать выбранный объект">
+            <span class="material-icons">edit</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="obj-delete" title="Удалить выбранный объект">
+            <span class="material-icons">delete</span>
+          </button>
+        </div>
+        <div class="modal-actions-right">
+          <button id="modal-objects-close">Закрыть</button>
+          <button id="obj-open" class="primary">Открыть</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -226,27 +282,30 @@
   </div>
 
   <div class="modal" id="modal-anims" hidden>
-    <div class="modal-box">
+    <div class="modal-box modal-box-anims">
       <div class="modal-title modal-title-flex">
         <span>Анимации</span>
         <button class="icon-btn icon-btn-sm" id="modal-anims-close" title="Закрыть">
           <span class="material-icons">close</span>
         </button>
       </div>
-      <ul id="anims-list"></ul>
+      <ul id="anims-list" class="list-theme-yellow"></ul>
       <div class="modal-actions modal-actions-split">
         <div class="modal-actions-left">
-          <button class="icon-btn icon-btn-sm" id="anim-add" title="Создать">
+          <button class="icon-btn icon-btn-sm" id="anim-add" title="Создать анимацию">
             <span class="material-icons">add</span>
           </button>
-          <button class="icon-btn icon-btn-sm" id="anim-rename" title="Переименовать">
+          <button class="icon-btn icon-btn-sm" id="anim-clone" title="Клонировать выбранную анимацию (_clone_0…)">
+            <span class="material-icons">content_copy</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="anim-rename" title="Переименовать анимацию">
             <span class="material-icons">edit</span>
           </button>
-          <button class="icon-btn icon-btn-sm" id="anim-delete" title="Удалить">
+          <button class="icon-btn icon-btn-sm" id="anim-delete" title="Удалить анимацию">
             <span class="material-icons">delete</span>
           </button>
         </div>
-        <button id="anim-ok">Готово</button>
+        <button id="anim-ok" class="primary">Готово</button>
       </div>
     </div>
   </div>
@@ -428,16 +487,31 @@
       </div>
     </div>
   </div>
+
+  <div class="modal modal-top" id="modal-unsaved" hidden>
+    <div class="modal-box modal-box-unsaved">
+      <div class="modal-title">Несохранённые изменения</div>
+      <div class="modal-body" id="unsaved-text">
+        В текущем объекте есть несохранённые изменения. Сохранить их перед переключением?
+      </div>
+      <div class="modal-actions modal-actions-unsaved">
+        <button id="unsaved-discard" class="danger-btn">Игнорировать изменения</button>
+        <span class="spacer"></span>
+        <button id="unsaved-stay">Продолжить редактирование</button>
+        <button id="unsaved-save" class="primary">Сохранить изменения</button>
+      </div>
+    </div>
+  </div>
   <div class="hint" id="hint"></div>
 
-  <script src="js/gizmo.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
-  <script src="js/api.js?v=2"></script>
-  <script src="js/scene.js?v=2"></script>
-  <script src="js/layers.js?v=2"></script>
-  <script src="js/animation.js?v=2"></script>
-  <script src="js/timeline.js?v=2"></script>
-  <script src="js/presets.js?v=2"></script>
-  <script src="js/main.js?v=2"></script>
+  <script src="js/gizmo.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
+  <script src="js/api.js?v=3"></script>
+  <script src="js/scene.js?v=3"></script>
+  <script src="js/layers.js?v=3"></script>
+  <script src="js/animation.js?v=3"></script>
+  <script src="js/timeline.js?v=3"></script>
+  <script src="js/presets.js?v=3"></script>
+  <script src="js/main.js?v=3"></script>
 </body>
 </html>

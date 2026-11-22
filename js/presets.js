@@ -349,6 +349,7 @@ function applyPosePreset(preset) {
     return;
   }
 
+  markDirty();
   syncSceneTransforms();
   renderOnionSkins();
   syncVisibilityUI();

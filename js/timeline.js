@@ -315,6 +315,7 @@ function addFrameAtFocus(preferredType) {
       if (kObj && kObj.type !== 'key') { kObj.type = 'key'; converted++; }
     }
     if (converted > 0) {
+      markDirty();
       applyAnimationAtTime(App.anim.time);
       syncSceneTransforms();
       renderOnionSkins();
@@ -333,6 +334,7 @@ function addFrameAtFocus(preferredType) {
     if (!part) return;
     const val = getPartPropValue(part, property);
     writeKeyOnTrack(partId, property, time, val, preferredType || 'tween', a);
+    markDirty();
     App.anim.selectedKeys = [{ partId, property, time }];
     renderTimeline();
     setHint(
@@ -353,6 +355,7 @@ function addFrameAtFocus(preferredType) {
       writeKeyOnTrack(part.id, pr, time, getPartPropValue(part, pr), preferredType || 'tween', a);
       newSel.push({ partId: part.id, property: pr, time });
     }
+    markDirty();
     App.anim.expanded.add(part.id);
     App.anim.selectedKeys = newSel;
     renderTimeline();
@@ -384,6 +387,7 @@ function deleteSelectedKeyframes() {
     }
   }
   App.anim.selectedKeys = [];
+  if (removed) markDirty();
   applyAnimationAtTime(App.anim.time);
   syncSceneTransforms();
   renderOnionSkins();
@@ -428,9 +432,6 @@ function beginKeyDrag(e, partId, property, keyObj) {
     const tr = getTrack(sk.partId, sk.property, a);
     if (!tr) continue;
     const ko = tr.keys.find(x => Math.abs(x.time - sk.time) < 1e-6);
-    const domEl = els.tlTracksInner.querySelector(
-      '.tl-key[data-part-id="' + CSS.escape(sk.partId) + '"][data-prop="' + sk.property + '"]'
-    );
     if (ko) {
       items.push({
         partId: sk.partId,
@@ -484,6 +485,7 @@ function updateKeyDrag(e) {
 function finishKeyDrag() {
   if (!tlKeyDrag) return;
   if (tlKeyDrag.moved) {
+    markDirty();
     const movedSet = new Set(tlKeyDrag.items.map(it => it.keyObj));
     const touchedTracks = new Set(tlKeyDrag.items.map(it => it.track));
     for (const tr of touchedTracks) {

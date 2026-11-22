@@ -540,11 +540,24 @@ async function fetchObjects() {
     return r.json();
   }
 
-  // 4) Статический манифест репозитория (GitHub Pages)
-  const r = await fetch('anim/index.json');
-  if (!r.ok) throw new Error('Не найден anim/index.json (выберите локальную папку в Настройках)');
-  const j = await r.json();
-  return Object.keys((j && j.objects) || {}).sort((a, b) => a.localeCompare(b));
+  // 4) Статический манифест репозитория (GitHub Pages) + локальные объекты сессии
+  let baseNames = [];
+  try {
+    const r = await fetch('anim/index.json');
+    if (r.ok) {
+      const j = await r.json();
+      baseNames = Object.keys((j && j.objects) || {});
+    }
+  } catch (_) {}
+
+  const merged = new Set();
+  for (const n of baseNames) {
+    if (!st.deletedObjects.has(n)) merged.add(n);
+  }
+  for (const n of Object.keys(st.customObjects || {})) {
+    merged.add(n);
+  }
+  return Array.from(merged).sort((a, b) => a.localeCompare(b));
 }
 
 async function fetchObjectData(name) {
@@ -599,7 +612,15 @@ async function fetchObjectData(name) {
     return r.json();
   }
 
-  // 4) Статический репозиторий GitHub Pages
+  // 4) Кастомный объект в памяти браузера (созданный/клонированный в режиме repo)
+  if (st.customObjects && st.customObjects[name]) {
+    const entry = st.customObjects[name];
+    const svgs = Object.keys(entry.svgs || {}).sort((a, b) => a.localeCompare(b));
+    const settings = entry.settings ? clone(entry.settings) : buildDefaultSettingsClient(name, svgs);
+    return { name, svgs, settings };
+  }
+
+  // 5) Статический репозиторий GitHub Pages
   const idxRes = await fetch('anim/index.json');
   const idxJson = idxRes.ok ? await idxRes.json() : { objects: {} };
   const svgs = (idxJson.objects && idxJson.objects[name]) || [];
@@ -614,26 +635,35 @@ async function fetchObjectData(name) {
   return { name, svgs, settings };
 }
 
-async function fetchSvg(name, file) {
+async function fetchSvgTextRaw(name, file) {
   const st = App.storage;
 
   if (st.mode === 'local-fs') {
     const dir = await getLocalObjectDirHandle(name, false);
     const fh = await dir.getFileHandle(file);
     const f = await fh.getFile();
-    return parseSvgDocument(await f.text(), file);
+    return f.text();
   }
 
   if (st.mode === 'local-files' && st.memoryObjects && st.memoryObjects[name]) {
     const txt = st.memoryObjects[name].svgs[file];
     if (!txt) throw new Error('SVG не найден в памяти: ' + file);
-    return parseSvgDocument(txt, file);
+    return txt;
+  }
+
+  if (st.customObjects && st.customObjects[name] && st.customObjects[name].svgs[file]) {
+    return st.customObjects[name].svgs[file];
   }
 
   const url = 'anim/' + encodeURIComponent(name) + '/' + encodeURIComponent(file);
   const r = await fetch(url);
   if (!r.ok) throw new Error('HTTP ' + r.status + ' on ' + file);
-  return parseSvgDocument(await r.text(), file);
+  return r.text();
+}
+
+async function fetchSvg(name, file) {
+  const txt = await fetchSvgTextRaw(name, file);
+  return parseSvgDocument(txt, file);
 }
 
 // -------- открытие и сохранение объекта --------
@@ -642,12 +672,14 @@ async function openObject(name) {
   try {
     setHint('Загрузка ' + name + '…');
     stopPlayback();
+    App._suppressDirty = true;
     const data = await fetchObjectData(name);
-    App.current     = name;
-    App.settings    = data.settings;
-    App.svgCache    = {};
-    App.selectedId  = null;
-    App.selectedIds = new Set();
+    App.current          = name;
+    App._objSelectedName = name;
+    App.settings         = data.settings;
+    App.svgCache         = {};
+    App.selectedId       = null;
+    App.selectedIds      = new Set();
     Gizmo.setMode(1);
 
     setPref(PREF_LAST_OBJ, name);
@@ -705,15 +737,52 @@ async function openObject(name) {
     applyBackgroundToViewport();
     fitView();
     Gizmo.render();
+    App._suppressDirty = false;
+    clearDirty();
     setHint('Объект "' + name + '": частей ' + App.settings.parts.length, 2500);
   } catch (e) {
+    App._suppressDirty = false;
     setHint('Ошибка: ' + e.message, 4000);
   }
+}
+
+function requestOpenObject(name) {
+  if (!name) return;
+  if (name === App.current && !App.dirty) {
+    closeObjectsModal();
+    return;
+  }
+  guardUnsavedChanges(() => {
+    closeObjectsModal();
+    openObject(name);
+  });
+}
+
+function clearCurrentObjectScene() {
+  stopPlayback();
+  App.current     = null;
+  App.settings    = null;
+  App.svgCache    = {};
+  App.selectedId  = null;
+  App.selectedIds = new Set();
+  clearDirty();
+  if (els.objName) els.objName.value = '';
+  if (els.animName) els.animName.value = '';
+  if (els.scene) els.scene.innerHTML = '';
+  if (els.onion) els.onion.innerHTML = '';
+  App._partDomMap = {};
+  App._onionPool = [];
+  renderLayers();
+  renderProperties();
+  updateSelSize();
+  renderTimeline();
+  Gizmo.render();
 }
 
 function buildSerializedSettings() {
   if (!App.current || !App.settings) return null;
   const out = clone(App.settings);
+  out.name = App.current;
   if (!out.clip) out.clip = { pivot: { x: 0.5, y: 0.5 } };
   out.clip.offset = clone(App.clipOffset);
 
@@ -746,7 +815,7 @@ async function downloadCurrentSettingsJson() {
   const out = buildSerializedSettings();
   if (!out) {
     setHint('Сначала откройте объект', 2000);
-    return;
+    return false;
   }
   const text = JSON.stringify(out, null, 2);
   if (typeof window.showSaveFilePicker === 'function') {
@@ -758,21 +827,24 @@ async function downloadCurrentSettingsJson() {
       const wr = await fh.createWritable();
       await wr.write(text);
       await wr.close();
+      clearDirty();
       setHint('Файл settings.json сохранён', 2000);
-      return;
+      return true;
     } catch (e) {
-      if (e && e.name === 'AbortError') return;
+      if (e && e.name === 'AbortError') return false;
     }
   }
   downloadJsonBlob('settings.json', text);
+  clearDirty();
   setHint('Скачан файл settings.json', 2000);
+  return true;
 }
 
 async function saveObject() {
   const out = buildSerializedSettings();
   if (!out) {
     setHint('Нечего сохранять', 2000);
-    return;
+    return false;
   }
   const jsonText = JSON.stringify(out, null, 2);
   const st = App.storage;
@@ -781,7 +853,7 @@ async function saveObject() {
     // Если есть ожидающая разрешения сохранённая папка — запрашиваем доступ и пишем в неё
     if (st.mode !== 'local-fs' && st.pendingHandle) {
       const ok = await reconnectSavedFolder();
-      if (!ok) return;
+      if (!ok) return false;
     }
 
     // 1) Прямая запись в локальную папку на диске (File System Access API)
@@ -798,8 +870,9 @@ async function saveObject() {
       const wr = await fh.createWritable();
       await wr.write(jsonText);
       await wr.close();
+      clearDirty();
       setHint('Сохранено на диск: ' + App.storage.folderLabel + '/' + App.current + '/settings.json', 2200);
-      return;
+      return true;
     }
 
     // 2) Сохранение через локальный сервер Node.js
@@ -817,41 +890,371 @@ async function saveObject() {
         } catch (_) {}
         throw new Error(msg);
       }
+      clearDirty();
       setHint('Сохранено: anim/' + App.current + '/settings.json', 1800);
-      return;
+      return true;
     }
 
     // 3) Открыто из GitHub Pages без привязанной локальной папки (или в Firefox)
     if (App.storage.mode === 'local-files' && App.storage.memoryObjects && App.storage.memoryObjects[App.current]) {
       App.storage.memoryObjects[App.current].settings = clone(out);
     }
-
-    if (typeof window.showDirectoryPicker === 'function') {
-      confirmDialog(
-        'Подключить локальную папку для сохранения?',
-        'Сейчас объект открыт из GitHub (режим чтения). Выберите локальную папку проекта на ПК, чтобы редактор сразу сохранил «' +
-          App.current + '/settings.json» на диск и запомнил расположение.',
-        async () => {
-          const picked = await pickLocalFolder();
-          if (picked && App.storage.mode === 'local-fs') {
-            await saveObject();
-          } else {
-            await downloadCurrentSettingsJson();
-          }
-        }
-      );
-      return;
+    if (App.storage.customObjects && App.storage.customObjects[App.current]) {
+      App.storage.customObjects[App.current].settings = clone(out);
     }
 
-    await downloadCurrentSettingsJson();
+    if (typeof window.showDirectoryPicker === 'function') {
+      return await new Promise((resolve) => {
+        confirmDialog(
+          'Подключить локальную папку для сохранения?',
+          'Сейчас объект открыт из GitHub (режим чтения). Выберите локальную папку проекта на ПК, чтобы редактор сразу сохранил «' +
+            App.current + '/settings.json» на диск и запомнил расположение.',
+          async () => {
+            const picked = await pickLocalFolder();
+            if (picked && App.storage.mode === 'local-fs') {
+              resolve(await saveObject());
+            } else {
+              resolve(await downloadCurrentSettingsJson());
+            }
+          }
+        );
+      });
+    }
+
+    return await downloadCurrentSettingsJson();
   } catch (e) {
     setHint('Ошибка сохранения: ' + e.message, 3500);
+    return false;
   }
 }
 
-// -------- модалка «Открыть объект» --------
+// -------- создание / клонирование / переименование / удаление объектов --------
+
+async function ensureWritableFolderIfPending() {
+  if (App.storage.mode !== 'local-fs' && App.storage.pendingHandle) {
+    await reconnectSavedFolder();
+  }
+  if (App.storage.mode === 'local-fs' && !App.storage.animHandle) {
+    throw new Error('Подключена папка одного объекта. Для управления списком объектов выберите общую папку anim/');
+  }
+}
+
+async function createObjectBackend() {
+  await ensureWritableFolderIfPending();
+  const list = await fetchObjects();
+  const newName = resolveAutoName(list, 'untitled_');
+  const defaultSettings = buildDefaultSettingsClient(newName, []);
+  const st = App.storage;
+
+  if (st.mode === 'local-fs' && st.animHandle) {
+    const dir = await st.animHandle.getDirectoryHandle(newName, { create: true });
+    const fh = await dir.getFileHandle('settings.json', { create: true });
+    const wr = await fh.createWritable();
+    await wr.write(JSON.stringify(defaultSettings, null, 2));
+    await wr.close();
+  } else if (st.mode === 'server') {
+    const r = await fetch('/api/objects/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || ('HTTP ' + r.status));
+    }
+  } else if (st.mode === 'local-files' && st.memoryObjects) {
+    st.memoryObjects[newName] = { svgs: {}, settings: defaultSettings };
+  } else {
+    st.deletedObjects.delete(newName);
+    st.customObjects[newName] = { svgs: {}, settings: defaultSettings };
+  }
+
+  return newName;
+}
+
+async function cloneObjectBackend(sourceName) {
+  await ensureWritableFolderIfPending();
+  const list = await fetchObjects();
+  if (!sourceName || !list.includes(sourceName)) {
+    throw new Error('Выберите объект для клонирования');
+  }
+  const newName = resolveCloneName(list, sourceName);
+  const st = App.storage;
+
+  // Если клонируем текущий открытый объект — берём актуальное состояние со сцены
+  const srcData = await fetchObjectData(sourceName);
+  const clonedSettings = (sourceName === App.current && App.settings)
+    ? buildSerializedSettings()
+    : clone(srcData.settings);
+  clonedSettings.name = newName;
+
+  if (st.mode === 'local-fs' && st.animHandle) {
+    const srcDir = await getLocalObjectDirHandle(sourceName, false);
+    const dstDir = await st.animHandle.getDirectoryHandle(newName, { create: true });
+    for await (const [fName, entry] of srcDir.entries()) {
+      if (entry.kind !== 'file' || fName === 'settings.json') continue;
+      const srcFile = await entry.getFile();
+      const dstFh = await dstDir.getFileHandle(fName, { create: true });
+      const wr = await dstFh.createWritable();
+      await wr.write(await srcFile.arrayBuffer());
+      await wr.close();
+    }
+    const stFh = await dstDir.getFileHandle('settings.json', { create: true });
+    const stWr = await stFh.createWritable();
+    await stWr.write(JSON.stringify(clonedSettings, null, 2));
+    await stWr.close();
+  } else if (st.mode === 'server') {
+    const r = await fetch('/api/object/' + encodeURIComponent(sourceName) + '/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newName })
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || ('HTTP ' + r.status));
+    }
+    if (sourceName === App.current && App.dirty) {
+      await fetch('/api/object/' + encodeURIComponent(newName) + '/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clonedSettings, null, 2)
+      });
+    }
+  } else {
+    const svgsMap = {};
+    for (const svgFile of (srcData.svgs || [])) {
+      try { svgsMap[svgFile] = await fetchSvgTextRaw(sourceName, svgFile); } catch (_) {}
+    }
+    if (st.mode === 'local-files' && st.memoryObjects) {
+      st.memoryObjects[newName] = { svgs: svgsMap, settings: clonedSettings };
+    } else {
+      st.deletedObjects.delete(newName);
+      st.customObjects[newName] = { svgs: svgsMap, settings: clonedSettings };
+    }
+  }
+
+  return newName;
+}
+
+async function renameObjectBackend(oldName, rawNewName) {
+  const newName = sanitizeEntityName(rawNewName);
+  if (!newName) {
+    setHint('Имя объекта не может быть пустым', 2000);
+    return { ok: false };
+  }
+  if (newName === oldName) {
+    return { ok: true, name: oldName, unchanged: true };
+  }
+
+  try {
+    await ensureWritableFolderIfPending();
+    const list = await fetchObjects();
+    if (list.includes(newName)) {
+      setHint('Объект с именем «' + newName + '» уже существует', 2400);
+      return { ok: false };
+    }
+
+    const st = App.storage;
+    if (st.mode === 'local-fs' && st.animHandle) {
+      const oldDir = await st.animHandle.getDirectoryHandle(oldName, { create: false });
+      const newDir = await st.animHandle.getDirectoryHandle(newName, { create: true });
+      for await (const [fName, entry] of oldDir.entries()) {
+        if (entry.kind !== 'file') continue;
+        const srcFile = await entry.getFile();
+        const dstFh = await newDir.getFileHandle(fName, { create: true });
+        const wr = await dstFh.createWritable();
+        if (fName === 'settings.json') {
+          let stObj = null;
+          try { stObj = JSON.parse(await srcFile.text()); } catch (_) {}
+          if (stObj) {
+            stObj.name = newName;
+            await wr.write(JSON.stringify(stObj, null, 2));
+          } else {
+            await wr.write(await srcFile.arrayBuffer());
+          }
+        } else {
+          await wr.write(await srcFile.arrayBuffer());
+        }
+        await wr.close();
+      }
+      await st.animHandle.removeEntry(oldName, { recursive: true });
+    } else if (st.mode === 'server') {
+      const r = await fetch('/api/object/' + encodeURIComponent(oldName) + '/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName })
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || ('HTTP ' + r.status));
+      }
+    } else if (st.mode === 'local-files' && st.memoryObjects && st.memoryObjects[oldName]) {
+      st.memoryObjects[newName] = st.memoryObjects[oldName];
+      if (st.memoryObjects[newName].settings) st.memoryObjects[newName].settings.name = newName;
+      delete st.memoryObjects[oldName];
+    } else {
+      const srcData = await fetchObjectData(oldName);
+      const svgsMap = {};
+      for (const svgFile of (srcData.svgs || [])) {
+        try { svgsMap[svgFile] = await fetchSvgTextRaw(oldName, svgFile); } catch (_) {}
+      }
+      const settingsCopy = clone(srcData.settings);
+      settingsCopy.name = newName;
+      st.customObjects[newName] = { svgs: svgsMap, settings: settingsCopy };
+      delete st.customObjects[oldName];
+      st.deletedObjects.add(oldName);
+    }
+
+    if (App.current === oldName) {
+      App.current = newName;
+      if (App.settings) App.settings.name = newName;
+      if (els.objName) els.objName.value = newName;
+      setPref(PREF_LAST_OBJ, newName);
+    }
+    if (App._objSelectedName === oldName) {
+      App._objSelectedName = newName;
+    }
+
+    setHint('Объект переименован: «' + newName + '»', 1800);
+    return { ok: true, name: newName };
+  } catch (e) {
+    setHint('Ошибка переименования: ' + e.message, 3200);
+    return { ok: false };
+  }
+}
+
+async function deleteObjectBackend(targetName) {
+  await ensureWritableFolderIfPending();
+  const st = App.storage;
+
+  if (st.mode === 'local-fs' && st.animHandle) {
+    await st.animHandle.removeEntry(targetName, { recursive: true });
+  } else if (st.mode === 'server') {
+    const r = await fetch('/api/object/' + encodeURIComponent(targetName) + '/delete', {
+      method: 'POST'
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || ('HTTP ' + r.status));
+    }
+  } else if (st.mode === 'local-files' && st.memoryObjects) {
+    delete st.memoryObjects[targetName];
+  } else {
+    delete st.customObjects[targetName];
+    st.deletedObjects.add(targetName);
+  }
+
+  if (App.current === targetName) {
+    clearCurrentObjectScene();
+  }
+}
+
+// -------- модалка «Открыть объект» с inline-переименованием --------
+
+let _activeObjectRowCancel = null;
+
+function cancelActiveObjectRowEdit() {
+  if (typeof _activeObjectRowCancel === 'function') {
+    const fn = _activeObjectRowCancel;
+    _activeObjectRowCancel = null;
+    fn();
+  }
+}
+
+function startObjectRowInlineRename(li, oldName) {
+  if (!li || li.classList.contains('editing')) return;
+  cancelActiveObjectRowEdit();
+
+  const labelEl = li.querySelector('.list-row-label');
+  const editBtn = li.querySelector('.list-row-edit-btn');
+  const iconEl  = editBtn ? editBtn.querySelector('.material-icons') : null;
+  if (!labelEl || !editBtn || !iconEl) return;
+
+  li.classList.add('editing');
+  iconEl.textContent = 'check';
+  editBtn.title = 'Подтвердить переименование (Enter)';
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'list-row-input';
+  inp.value = oldName;
+  inp.autocomplete = 'off';
+  inp.spellcheck = false;
+
+  labelEl.replaceWith(inp);
+  inp.focus();
+  inp.select();
+
+  let finished = false;
+
+  function restoreView(displayText) {
+    if (finished) return;
+    finished = true;
+    _activeObjectRowCancel = null;
+    document.removeEventListener('mousedown', onDocDown, true);
+    li.classList.remove('editing');
+    iconEl.textContent = 'edit';
+    editBtn.title = 'Переименовать';
+    const span = document.createElement('span');
+    span.className = 'list-row-label';
+    span.textContent = displayText;
+    if (inp.parentNode === li) inp.replaceWith(span);
+  }
+
+  async function commit() {
+    if (finished) return;
+    const raw = inp.value;
+    const res = await renameObjectBackend(oldName, raw);
+    if (!res.ok) {
+      inp.focus();
+      inp.select();
+      return;
+    }
+    restoreView(res.name);
+    await populateObjectsModalList();
+  }
+
+  function cancel() {
+    restoreView(oldName);
+  }
+
+  function onDocDown(e) {
+    if (!li.contains(e.target)) {
+      cancel();
+    }
+  }
+
+  inp.addEventListener('click', (e) => e.stopPropagation());
+  inp.addEventListener('dblclick', (e) => e.stopPropagation());
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      cancel();
+    }
+  });
+
+  editBtn.onclick = (e) => {
+    e.stopPropagation();
+    commit();
+  };
+
+  setTimeout(() => document.addEventListener('mousedown', onDocDown, true), 0);
+  _activeObjectRowCancel = () => {
+    restoreView(oldName);
+    editBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      startObjectRowInlineRename(li, oldName);
+    };
+  };
+}
 
 async function populateObjectsModalList() {
+  cancelActiveObjectRowEdit();
   const st = App.storage;
   if (els.objectsSourceText) {
     if (st.mode === 'local-fs') {
@@ -863,7 +1266,7 @@ async function populateObjectsModalList() {
     } else if (st.mode === 'local-files') {
       els.objectsSourceText.textContent = 'Импорт в память: ' + st.folderLabel;
     } else {
-      els.objectsSourceText.textContent = 'Источник: GitHub Pages (выберите локальную папку для записи)';
+      els.objectsSourceText.textContent = 'Источник: GitHub Pages (выберите локальную папку для записи на диск)';
     }
   }
   if (els.objectsBtnReconnect) {
@@ -874,21 +1277,56 @@ async function populateObjectsModalList() {
     const list = await fetchObjects();
     els.objectsList.innerHTML = '';
     if (!list.length) {
+      App._objSelectedName = null;
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'В выбранном источнике пока нет объектов';
+      li.textContent = 'В выбранном источнике пока нет объектов. Нажмите «+» внизу слева.';
       els.objectsList.appendChild(li);
-    } else {
-      for (const name of list) {
-        const li = document.createElement('li');
-        li.textContent = name;
-        if (name === App.current) li.classList.add('selected');
-        li.onclick = () => {
-          closeObjectsModal();
-          openObject(name);
-        };
-        els.objectsList.appendChild(li);
-      }
+      return;
+    }
+
+    if (!App._objSelectedName || !list.includes(App._objSelectedName)) {
+      App._objSelectedName = (App.current && list.includes(App.current)) ? App.current : list[0];
+    }
+
+    for (const name of list) {
+      const li = document.createElement('li');
+      li.className = 'editable-list-row';
+      li.dataset.name = name;
+      if (name === App._objSelectedName) li.classList.add('selected');
+
+      const span = document.createElement('span');
+      span.className = 'list-row-label';
+      span.textContent = name;
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'icon-btn icon-btn-sm list-row-edit-btn';
+      editBtn.title = 'Переименовать объект';
+      editBtn.innerHTML = '<span class="material-icons">edit</span>';
+      editBtn.onclick = (e) => {
+        e.stopPropagation();
+        startObjectRowInlineRename(li, name);
+      };
+
+      li.appendChild(span);
+      li.appendChild(editBtn);
+
+      li.addEventListener('click', () => {
+        if (li.classList.contains('editing')) return;
+        App._objSelectedName = name;
+        els.objectsList.querySelectorAll('li.editable-list-row').forEach(row => {
+          row.classList.toggle('selected', row.dataset.name === name);
+        });
+      });
+
+      li.addEventListener('dblclick', () => {
+        if (li.classList.contains('editing')) return;
+        App._objSelectedName = name;
+        requestOpenObject(name);
+      });
+
+      els.objectsList.appendChild(li);
     }
   } catch (e) {
     els.objectsList.innerHTML = '';
@@ -899,12 +1337,88 @@ async function populateObjectsModalList() {
   }
 }
 
+async function createObjectFromModal() {
+  try {
+    const newName = await createObjectBackend();
+    App._objSelectedName = newName;
+    await populateObjectsModalList();
+    const row = Array.from(els.objectsList.querySelectorAll('li[data-name]')).find(x => x.dataset.name === newName);
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+    setHint('Создан объект «' + newName + '»', 2000);
+  } catch (e) {
+    setHint('Ошибка создания объекта: ' + e.message, 3200);
+  }
+}
+
+async function cloneObjectFromModal() {
+  if (!App._objSelectedName) {
+    setHint('Выберите объект в списке для клонирования', 2000);
+    return;
+  }
+  try {
+    const newName = await cloneObjectBackend(App._objSelectedName);
+    App._objSelectedName = newName;
+    await populateObjectsModalList();
+    const row = Array.from(els.objectsList.querySelectorAll('li[data-name]')).find(x => x.dataset.name === newName);
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+    setHint('Создан клон «' + newName + '»', 2000);
+  } catch (e) {
+    setHint('Ошибка клонирования: ' + e.message, 3200);
+  }
+}
+
+function renameObjectFromModal() {
+  if (!App._objSelectedName) {
+    setHint('Выберите объект для переименования', 2000);
+    return;
+  }
+  const rows = els.objectsList.querySelectorAll('li.editable-list-row');
+  for (const row of rows) {
+    if (row.dataset.name === App._objSelectedName) {
+      startObjectRowInlineRename(row, App._objSelectedName);
+      return;
+    }
+  }
+}
+
+function deleteObjectFromModal() {
+  if (!App._objSelectedName) {
+    setHint('Выберите объект для удаления', 2000);
+    return;
+  }
+  const target = App._objSelectedName;
+  confirmDialog(
+    'Удалить объект?',
+    'Удалить объект «' + target + '» со всеми его анимациями без возможности отмены?',
+    async () => {
+      try {
+        await deleteObjectBackend(target);
+        App._objSelectedName = null;
+        await populateObjectsModalList();
+        setHint('Объект «' + target + '» удалён', 1800);
+      } catch (e) {
+        setHint('Ошибка удаления: ' + e.message, 3200);
+      }
+    }
+  );
+}
+
+function openSelectedObjectFromModal() {
+  if (!App._objSelectedName) {
+    setHint('Выберите объект в списке', 1800);
+    return;
+  }
+  requestOpenObject(App._objSelectedName);
+}
+
 async function openObjectsModal() {
+  App._objSelectedName = App.current;
   els.modalObjects.hidden = false;
   await populateObjectsModalList();
 }
 
 function closeObjectsModal() {
+  cancelActiveObjectRowEdit();
   els.modalObjects.hidden = true;
 }
 
@@ -971,11 +1485,17 @@ function applySettingsModal() {
     const fps = clamp(Math.round(parseFloat(els.stFps.value) || 60), 10, 120);
     const fw  = clamp(Math.round(parseFloat(els.stFrameW.value) || 512), 64, 4096);
     const fh  = clamp(Math.round(parseFloat(els.stFrameH.value) || 512), 64, 4096);
+    const prevFps = App.settings.fps;
+    const prevFw  = App.settings.frame && App.settings.frame.width;
+    const prevFh  = App.settings.frame && App.settings.frame.height;
     App.settings.fps = fps;
     if (!App.settings.frame) App.settings.frame = { width: fw, height: fh, background: 'grid' };
     else {
       App.settings.frame.width = fw;
       App.settings.frame.height = fh;
+    }
+    if (fps !== prevFps || fw !== prevFw || fh !== prevFh) {
+      markDirty();
     }
     renderTimeline();
   }

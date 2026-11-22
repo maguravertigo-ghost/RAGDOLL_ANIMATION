@@ -154,6 +154,7 @@ function writeKeyOnTrack(partId, property, time, value, explicitType, animObj) {
 // Вызывается при изменении части из Gizmo или панели Свойств
 function onPartEdited(part, kindOrProp, isLiveDrag) {
   if (!App.settings || !part) return;
+  markDirty();
   const a = getCurrentAnimation();
 
   // Настройка точки вращения (pivot) меняет базовую позу скелета, а не создаёт ключи анимации
@@ -280,6 +281,7 @@ function buildResetFromCurrentPose() {
     App.settings.animations.unshift(resetObj);
   }
 
+  markDirty();
   selectAnimation('reset');
   setHint('Поза «reset» сохранена (' + App.settings.parts.length + ' слоёв)', 2000);
 }
@@ -323,6 +325,7 @@ function convertAllToKeyframes() {
       for (const t of a.tracks) {
         for (const k of (t.keys || [])) k.type = 'key';
       }
+      markDirty();
       applyAnimationAtTime(App.anim.time);
       syncSceneTransforms();
       renderOnionSkins();
@@ -334,7 +337,140 @@ function convertAllToKeyframes() {
   );
 }
 
-// -------- модалка управления анимациями --------
+// -------- модалка управления анимациями (с inline-переименованием и клонированием) --------
+
+let _activeAnimRowCancel = null;
+
+function cancelActiveAnimRowEdit() {
+  if (typeof _activeAnimRowCancel === 'function') {
+    const fn = _activeAnimRowCancel;
+    _activeAnimRowCancel = null;
+    fn();
+  }
+}
+
+function renameSpecificAnimation(oldName, rawNewName) {
+  if (!App.settings || !App.settings.animations) return { ok: false };
+  const animObj = App.settings.animations.find(x => x.name === oldName);
+  if (!animObj) return { ok: false };
+
+  const newName = sanitizeEntityName(rawNewName);
+  if (!newName) {
+    setHint('Имя анимации не может быть пустым', 2000);
+    return { ok: false };
+  }
+  if (newName === oldName) {
+    return { ok: true, name: oldName, unchanged: true };
+  }
+  if (App.settings.animations.some(x => x.name === newName)) {
+    setHint('Анимация с именем «' + newName + '» уже существует', 2200);
+    return { ok: false };
+  }
+
+  animObj.name = newName;
+  if (App._animSelectedName === oldName) {
+    App._animSelectedName = newName;
+  }
+  if (els.animName && els.animName.value === oldName) {
+    els.animName.value = newName;
+  } else if (getCurrentAnimation() && getCurrentAnimation().name === newName && els.animName) {
+    els.animName.value = newName;
+  }
+  markDirty();
+  setHint('Анимация переименована: «' + newName + '»', 1800);
+  return { ok: true, name: newName };
+}
+
+function startAnimRowInlineRename(li, oldName) {
+  if (!li || li.classList.contains('editing')) return;
+  cancelActiveAnimRowEdit();
+
+  const labelEl = li.querySelector('.list-row-label');
+  const editBtn = li.querySelector('.list-row-edit-btn');
+  const iconEl  = editBtn ? editBtn.querySelector('.material-icons') : null;
+  if (!labelEl || !editBtn || !iconEl) return;
+
+  li.classList.add('editing');
+  iconEl.textContent = 'check';
+  editBtn.title = 'Подтвердить переименование (Enter)';
+
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'list-row-input';
+  inp.value = oldName;
+  inp.autocomplete = 'off';
+  inp.spellcheck = false;
+
+  labelEl.replaceWith(inp);
+  inp.focus();
+  inp.select();
+
+  let finished = false;
+
+  function restoreView(displayText) {
+    if (finished) return;
+    finished = true;
+    _activeAnimRowCancel = null;
+    document.removeEventListener('mousedown', onDocDown, true);
+    li.classList.remove('editing');
+    iconEl.textContent = 'edit';
+    editBtn.title = 'Переименовать анимацию';
+    const span = document.createElement('span');
+    span.className = 'list-row-label';
+    span.textContent = displayText;
+    if (inp.parentNode === li) inp.replaceWith(span);
+  }
+
+  function commit() {
+    if (finished) return;
+    const res = renameSpecificAnimation(oldName, inp.value);
+    if (!res.ok) {
+      inp.focus();
+      inp.select();
+      return;
+    }
+    restoreView(res.name);
+    renderAnimsList();
+  }
+
+  function cancel() {
+    restoreView(oldName);
+  }
+
+  function onDocDown(e) {
+    if (!li.contains(e.target)) {
+      cancel();
+    }
+  }
+
+  inp.addEventListener('click', (e) => e.stopPropagation());
+  inp.addEventListener('dblclick', (e) => e.stopPropagation());
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      cancel();
+    }
+  });
+
+  editBtn.onclick = (e) => {
+    e.stopPropagation();
+    commit();
+  };
+
+  setTimeout(() => document.addEventListener('mousedown', onDocDown, true), 0);
+  _activeAnimRowCancel = () => {
+    restoreView(oldName);
+    editBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      startAnimRowInlineRename(li, oldName);
+    };
+  };
+}
 
 function openAnimsModal() {
   if (!App.settings) { setHint('Сначала откройте объект', 2000); return; }
@@ -347,24 +483,53 @@ function openAnimsModal() {
 }
 
 function closeAnimsModal() {
+  cancelActiveAnimRowEdit();
   els.modalAnims.hidden = true;
 }
 
 function renderAnimsList() {
+  cancelActiveAnimRowEdit();
   els.animsList.innerHTML = '';
-  for (const a of (App.settings.animations || [])) {
+  const anims = (App.settings && App.settings.animations) || [];
+
+  for (const a of anims) {
     const li = document.createElement('li');
-    li.textContent = a.name;
+    li.className = 'editable-list-row';
+    li.dataset.name = a.name;
     if (a.name === App._animSelectedName) li.classList.add('selected');
-    li.onclick = () => {
-      App._animSelectedName = a.name;
-      renderAnimsList();
+
+    const span = document.createElement('span');
+    span.className = 'list-row-label';
+    span.textContent = a.name;
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'icon-btn icon-btn-sm list-row-edit-btn';
+    editBtn.title = 'Переименовать анимацию';
+    editBtn.innerHTML = '<span class="material-icons">edit</span>';
+    editBtn.onclick = (e) => {
+      e.stopPropagation();
+      startAnimRowInlineRename(li, a.name);
     };
-    li.ondblclick = () => {
+
+    li.appendChild(span);
+    li.appendChild(editBtn);
+
+    li.addEventListener('click', () => {
+      if (li.classList.contains('editing')) return;
+      App._animSelectedName = a.name;
+      els.animsList.querySelectorAll('li.editable-list-row').forEach(row => {
+        row.classList.toggle('selected', row.dataset.name === a.name);
+      });
+    });
+
+    li.addEventListener('dblclick', () => {
+      if (li.classList.contains('editing')) return;
       App._animSelectedName = a.name;
       selectAnimation(a.name);
       closeAnimsModal();
-    };
+    });
+
     els.animsList.appendChild(li);
   }
 }
@@ -391,17 +556,40 @@ function selectAnimation(name) {
 }
 
 function createAnimation() {
-  promptText('Новая анимация', 'anim', (name) => {
-    if (!name) return;
-    if (App.settings.animations.some(a => a.name === name)) {
-      setHint('Анимация с таким именем уже есть', 2000);
-      return;
-    }
-    App.settings.animations.push({ name, duration: 1, loop: true, tracks: [] });
-    App._animSelectedName = name;
-    selectAnimation(name);
-    renderAnimsList();
-  });
+  if (!App.settings) return;
+  if (!App.settings.animations) App.settings.animations = [];
+  const existingNames = App.settings.animations.map(a => a.name);
+  const newName = resolveAutoName(existingNames, 'untitled_');
+  App.settings.animations.push({ name: newName, duration: 1, loop: true, tracks: [] });
+  App._animSelectedName = newName;
+  markDirty();
+  selectAnimation(newName);
+  renderAnimsList();
+  const row = Array.from(els.animsList.querySelectorAll('li[data-name]')).find(x => x.dataset.name === newName);
+  if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  setHint('Создана анимация «' + newName + '»', 1800);
+}
+
+function cloneAnimation() {
+  if (!App.settings || !App.settings.animations || !App.settings.animations.length) return;
+  const srcName = App._animSelectedName || getCurrentAnimation().name;
+  const srcAnim = App.settings.animations.find(a => a.name === srcName);
+  if (!srcAnim) {
+    setHint('Выберите анимацию для клонирования', 1800);
+    return;
+  }
+  const existingNames = App.settings.animations.map(a => a.name);
+  const newName = resolveCloneName(existingNames, srcName);
+  const cloned = clone(srcAnim);
+  cloned.name = newName;
+  App.settings.animations.push(cloned);
+  App._animSelectedName = newName;
+  markDirty();
+  selectAnimation(newName);
+  renderAnimsList();
+  const row = Array.from(els.animsList.querySelectorAll('li[data-name]')).find(x => x.dataset.name === newName);
+  if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  setHint('Создан клон анимации «' + newName + '»', 1800);
 }
 
 function deleteAnimation() {
@@ -418,28 +606,24 @@ function deleteAnimation() {
       const i = App.settings.animations.findIndex(a => a.name === targetName);
       if (i < 0) return;
       App.settings.animations.splice(i, 1);
+      markDirty();
       const next = App.settings.animations[0].name;
       selectAnimation(next);
       renderAnimsList();
+      setHint('Анимация «' + targetName + '» удалена', 1800);
     }
   );
 }
 
 function renameAnimation() {
   if (!App._animSelectedName) { setHint('Выберите анимацию', 2000); return; }
-  const a = App.settings.animations.find(x => x.name === App._animSelectedName);
-  if (!a) return;
-  promptText('Переименовать анимацию', a.name, (name) => {
-    if (!name || name === a.name) return;
-    if (App.settings.animations.some(x => x.name === name)) {
-      setHint('Анимация с таким именем уже есть', 2000);
+  const rows = els.animsList.querySelectorAll('li.editable-list-row');
+  for (const row of rows) {
+    if (row.dataset.name === App._animSelectedName) {
+      startAnimRowInlineRename(row, App._animSelectedName);
       return;
     }
-    a.name = name;
-    App._animSelectedName = name;
-    els.animName.value = name;
-    renderAnimsList();
-  });
+  }
 }
 
 // -------- воспроизведение --------

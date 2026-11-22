@@ -59,14 +59,100 @@ function setupOnionControls() {
   });
 }
 
+function setupHeaderInlineRename(groupEl, inputEl, btnEl, getCurrentVal, commitFn) {
+  if (!groupEl || !inputEl || !btnEl) return;
+  const iconEl = btnEl.querySelector('.material-icons');
+  const defaultTitle = btnEl.title || 'Переименовать';
+  let editing = false;
+  let origVal = '';
+
+  function exitEdit(finalValue) {
+    if (!editing) return;
+    editing = false;
+    document.removeEventListener('mousedown', onOutsideMouseDown, true);
+    groupEl.classList.remove('editing');
+    inputEl.readOnly = true;
+    inputEl.tabIndex = -1;
+    if (finalValue !== undefined) inputEl.value = finalValue;
+    inputEl.blur();
+    if (iconEl) iconEl.textContent = 'edit';
+    btnEl.title = defaultTitle;
+  }
+
+  async function applyEdit() {
+    if (!editing) return;
+    const raw = inputEl.value;
+    const res = await commitFn(origVal, raw);
+    if (!res || !res.ok) {
+      inputEl.focus();
+      inputEl.select();
+      return;
+    }
+    exitEdit(res.name);
+  }
+
+  function cancelEdit() {
+    exitEdit(origVal);
+  }
+
+  function onOutsideMouseDown(e) {
+    if (!groupEl.contains(e.target)) {
+      cancelEdit();
+    }
+  }
+
+  function enterEdit() {
+    const cur = getCurrentVal();
+    if (!cur) {
+      setHint('Сначала откройте объект', 1800);
+      return;
+    }
+    origVal = cur;
+    editing = true;
+    groupEl.classList.add('editing');
+    inputEl.readOnly = false;
+    inputEl.tabIndex = 0;
+    inputEl.value = cur;
+    if (iconEl) iconEl.textContent = 'check';
+    btnEl.title = 'Применить название (Enter)';
+    inputEl.focus();
+    inputEl.select();
+    setTimeout(() => document.addEventListener('mousedown', onOutsideMouseDown, true), 0);
+  }
+
+  btnEl.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (editing) applyEdit();
+    else enterEdit();
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (!editing) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      applyEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelEdit();
+    }
+  });
+}
+
 function setupGlobalShortcuts() {
   const vp = els.viewport;
 
   document.addEventListener('keydown', (e) => {
     const ae = document.activeElement;
-    const inField = ae && /input|textarea|select/i.test(ae.tagName);
+    const inField = ae && /input|textarea|select/i.test(ae.tagName) && !ae.readOnly;
 
     if (e.key === 'Escape') {
+      if (els.modalUnsaved && !els.modalUnsaved.hidden) {
+        els.unsavedStay.click();
+        return;
+      }
       if (!els.modalObjects.hidden) closeObjectsModal();
       if (!els.modalAnims.hidden) closeAnimsModal();
       if (!els.modalBg.hidden) closeBgModal();
@@ -88,7 +174,8 @@ function setupGlobalShortcuts() {
     }
 
     if (inField) return;
-    if (!els.modalRename.hidden || !els.modalConfirm.hidden) return;
+    if (!els.modalRename.hidden || !els.modalConfirm.hidden ||
+        (els.modalUnsaved && !els.modalUnsaved.hidden)) return;
 
     if (e.code === 'Space') {
       if (!App.spaceDown) {
@@ -125,6 +212,8 @@ function setupGlobalShortcuts() {
 
 function init() {
   cacheEls();
+  if (els.appVersion) els.appVersion.textContent = APP_VERSION;
+
   setupSceneInput();
   setupGlobalShortcuts();
   setupTimelineScroll();
@@ -132,6 +221,25 @@ function init() {
   setupBgPicker();
   setupOnionControls();
   setupPresetsControls();
+
+  // Inline-переименование текущего объекта и анимации в верхнем баре
+  setupHeaderInlineRename(
+    els.objNameGroup,
+    els.objName,
+    els.btnObjInlineRename,
+    () => App.current || '',
+    async (oldName, rawNewName) => renameObjectBackend(oldName, rawNewName)
+  );
+  setupHeaderInlineRename(
+    els.animNameGroup,
+    els.animName,
+    els.btnAnimInlineRename,
+    () => {
+      const a = getCurrentAnimation();
+      return a ? a.name : '';
+    },
+    async (oldName, rawNewName) => renameSpecificAnimation(oldName, rawNewName)
+  );
 
   // Связываем колбэки для Gizmo
   App.syncProperties = syncPropertyInputs;
@@ -141,6 +249,7 @@ function init() {
     if (App.anim.onion && !isLive) renderOnionSkins();
   };
   App.onChange = () => {
+    markDirty();
     if (App.anim.onion) renderOnionSkins();
     updateSelSize();
   };
@@ -149,12 +258,14 @@ function init() {
   Gizmo.setOnModeChange(updateModeButtons);
   updateModeButtons(Gizmo.mode);
 
+  updateGridButtonsUI();
+  updateSaveButtonUI();
   updateRealtimeUI();
   updateSelSize();
   renderProperties();
   renderTimeline();
 
-  // Верхняя панель и модалка выбора объекта
+  // Верхняя панель и модалка управления объектами
   els.btnObjects.addEventListener('click', openObjectsModal);
   els.modalObjects.addEventListener('click', (e) => {
     if (e.target === els.modalObjects) closeObjectsModal();
@@ -163,6 +274,11 @@ function init() {
   if (els.modalObjectsX) els.modalObjectsX.addEventListener('click', closeObjectsModal);
   if (els.objectsBtnPick) els.objectsBtnPick.addEventListener('click', pickLocalFolder);
   if (els.objectsBtnReconnect) els.objectsBtnReconnect.addEventListener('click', reconnectSavedFolder);
+  if (els.objAdd)    els.objAdd.addEventListener('click', createObjectFromModal);
+  if (els.objClone)  els.objClone.addEventListener('click', cloneObjectFromModal);
+  if (els.objRename) els.objRename.addEventListener('click', renameObjectFromModal);
+  if (els.objDelete) els.objDelete.addEventListener('click', deleteObjectFromModal);
+  if (els.objOpen)   els.objOpen.addEventListener('click', openSelectedObjectFromModal);
 
   // Чип статуса хранилища и модалка Настройки
   if (els.btnStorageStatus) {
@@ -193,13 +309,14 @@ function init() {
   els.btnUngroup.addEventListener('click', ungroupSelected);
   els.btnPropsCollapse.addEventListener('click', togglePropsCollapse);
 
-  // Модалка анимаций
+  // Модалка анимаций (Создать / Клонировать / Переименовать / Удалить)
   els.btnAnim.addEventListener('click', openAnimsModal);
   els.modalAnimsClose.addEventListener('click', closeAnimsModal);
   els.modalAnims.addEventListener('click', (e) => {
     if (e.target === els.modalAnims) closeAnimsModal();
   });
   els.animAdd.addEventListener('click', createAnimation);
+  if (els.animClone) els.animClone.addEventListener('click', cloneAnimation);
   els.animRename.addEventListener('click', renameAnimation);
   els.animDelete.addEventListener('click', deleteAnimation);
   els.animOk.addEventListener('click', () => {
@@ -208,7 +325,7 @@ function init() {
     closeAnimsModal();
   });
 
-  // Ряд инструментов сцены
+  // Ряд инструментов сцены (зум + крест + сетка + привязка к сетке + режимы Gizmo)
   $$('.tools-row [data-act]').forEach(btn => {
     btn.addEventListener('click', () => {
       const act = btn.dataset.act;
@@ -217,6 +334,10 @@ function init() {
       if (act === 'zoom-fit') fitView();
     });
   });
+
+  if (els.btnCrosshair) els.btnCrosshair.addEventListener('click', toggleCrosshair);
+  if (els.btnGrid)      els.btnGrid.addEventListener('click', toggleSceneGrid);
+  if (els.btnSnap)      els.btnSnap.addEventListener('click', toggleGridSnap);
 
   $$('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => Gizmo.setMode(parseInt(btn.dataset.mode, 10)));
@@ -255,7 +376,10 @@ function init() {
   els.pbLoop.addEventListener('click', () => {
     App.anim.loop = !App.anim.loop;
     const a = getCurrentAnimation();
-    if (a) a.loop = App.anim.loop;
+    if (a) {
+      a.loop = App.anim.loop;
+      markDirty();
+    }
     updatePlaybackUI();
     renderTimeline();
   });
@@ -282,7 +406,10 @@ function init() {
     if (!a) return;
     let v = parseFloat(els.pbDuration.value);
     if (!isFinite(v) || v <= 0) v = 1;
-    a.duration = v;
+    if (a.duration !== v) {
+      a.duration = v;
+      markDirty();
+    }
     App.anim.time = Math.min(App.anim.time, v);
     App.anim.loopEnd = v;
     if (App.anim.loopStart >= v) App.anim.loopStart = 0;
@@ -290,6 +417,13 @@ function init() {
     renderScene();
     renderOnionSkins();
     renderTimeline();
+  });
+
+  window.addEventListener('beforeunload', (e) => {
+    if (App.dirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
   });
 
   window.addEventListener('resize', () => {
