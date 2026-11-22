@@ -149,6 +149,11 @@ function setupGlobalShortcuts() {
     const inField = ae && /input|textarea|select/i.test(ae.tagName) && !ae.readOnly;
 
     if (e.key === 'Escape') {
+      if (App.stage && App.stage.previewFullscreen && typeof exitStageFullscreenPreview === 'function') {
+        e.preventDefault();
+        exitStageFullscreenPreview();
+        return;
+      }
       if (els.modalUnsaved && !els.modalUnsaved.hidden) {
         els.unsavedStay.click();
         return;

@@ -1,15 +1,162 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "field",
+  "sceneKind": "gameplay",
+  "cutscenes": [],
   "frame": {
     "width": 1366,
     "height": 768
   },
   "background": {
-    "color": "#243447",
+    "color": "#7ec8e3",
     "file": "",
     "fit": "stretch",
-    "opacity": 1
+    "opacity": 1,
+    "visible": true
   },
-  "items": []
+  "guides": [],
+  "items": [
+    {
+      "id": "folder_env",
+      "label": "Окружение",
+      "isGroup": true,
+      "parent": null,
+      "visible": true,
+      "opacity": 1
+    },
+    {
+      "id": "asset_skyline",
+      "label": "skyline",
+      "type": "asset",
+      "file": "skyline.svg",
+      "parent": "folder_env",
+      "anchor": { "x": 0.5, "y": 0.62 },
+      "scaleMode": "width",
+      "scale": { "x": 2.4, "y": 2.4 },
+      "rotation": 0,
+      "visible": true,
+      "opacity": 1,
+      "interaction": {
+        "role": "static",
+        "gameTag": "",
+        "clickable": false,
+        "draggable": false,
+        "onClickAnim": "",
+        "initialState": "visible"
+      }
+    },
+    {
+      "id": "asset_grass_bg",
+      "label": "grass_background_line",
+      "type": "asset",
+      "file": "grass_background_line.svg",
+      "parent": "folder_env",
+      "anchor": { "x": 0.5, "y": 0.79 },
+      "scaleMode": "width",
+      "scale": { "x": 2.2, "y": 2.2 },
+      "rotation": 0,
+      "visible": true,
+      "opacity": 1,
+      "interaction": {
+        "role": "static",
+        "gameTag": "",
+        "clickable": false,
+        "draggable": false,
+        "onClickAnim": "",
+        "initialState": "visible"
+      }
+    },
+    {
+      "id": "asset_ground",
+      "label": "ground",
+      "type": "asset",
+      "file": "ground.svg",
+      "parent": "folder_env",
+      "anchor": { "x": 0.5, "y": 0.9 },
+      "scaleMode": "width",
+      "scale": { "x": 2.2, "y": 2.3 },
+      "rotation": 0,
+      "visible": true,
+      "opacity": 1,
+      "interaction": {
+        "role": "static",
+        "gameTag": "",
+        "clickable": false,
+        "draggable": false,
+        "onClickAnim": "",
+        "initialState": "visible"
+      }
+    },
+    {
+      "id": "obj_flower",
+      "label": "flower",
+      "type": "object",
+      "objectName": "flower",
+      "parent": null,
+      "anchor": { "x": 0.28, "y": 0.72 },
+      "scaleMode": "fit",
+      "scale": { "x": 0.85, "y": 0.85 },
+      "rotation": 0,
+      "animation": "idle",
+      "loop": true,
+      "speed": 1,
+      "phase": 0,
+      "visible": true,
+      "opacity": 1,
+      "interaction": {
+        "role": "interactive",
+        "gameTag": "field_flower",
+        "clickable": true,
+        "draggable": false,
+        "onClickAnim": "idle",
+        "initialState": "visible"
+      }
+    },
+    {
+      "id": "obj_fairy",
+      "label": "fairy",
+      "type": "object",
+      "objectName": "fairy",
+      "parent": null,
+      "anchor": { "x": 0.5, "y": 0.46 },
+      "scaleMode": "fit",
+      "scale": { "x": 0.65, "y": 0.65 },
+      "rotation": 0,
+      "animation": "idle",
+      "loop": true,
+      "speed": 1,
+      "phase": 0,
+      "visible": true,
+      "opacity": 1,
+      "interaction": {
+        "role": "interactive",
+        "gameTag": "npc_fairy",
+        "clickable": true,
+        "draggable": false,
+        "onClickAnim": "idle",
+        "initialState": "visible"
+      }
+    },
+    {
+      "id": "asset_grass_fg",
+      "label": "grass_line",
+      "type": "asset",
+      "file": "grass_line.svg",
+      "parent": null,
+      "anchor": { "x": 0.5, "y": 0.91 },
+      "scaleMode": "width",
+      "scale": { "x": 2.2, "y": 2.2 },
+      "rotation": 0,
+      "visible": true,
+      "opacity": 1,
+      "interaction": {
+        "role": "static",
+        "gameTag": "",
+        "clickable": false,
+        "draggable": false,
+        "onClickAnim": "",
+        "initialState": "visible"
+      }
+    }
+  ]
 }
