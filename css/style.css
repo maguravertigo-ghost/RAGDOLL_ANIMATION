@@ -1982,6 +1982,13 @@ body[data-editor-mode="object"] .stage-ruler-corner {
 }
 
 /* SVG-слой направляющих поверх сцены и гизмо */
+body[data-editor-mode="object"] #stage-guides-svg,
+body[data-editor-mode="object"] #stage-gizmo-svg {
+  display: none !important;
+}
+body[data-editor-mode="stage"] #gizmo-svg {
+  display: none !important;
+}
 #stage-gizmo-svg {
   z-index: 6;
 }
@@ -2003,31 +2010,53 @@ body.guide-dragging * {
 body.guide-dragging #stage-guides-svg {
   z-index: 11;
 }
+.stage-guide-shadow {
+  stroke: rgba(6, 10, 16, 0.58);
+  stroke-width: 2.8px;
+  pointer-events: none;
+}
 .stage-guide-line {
   stroke: #3bc9db;
-  stroke-width: 1.15px;
-  stroke-dasharray: 5 3;
+  stroke-width: 1.45px;
+  stroke-dasharray: 6 3;
   pointer-events: none;
 }
 .stage-guide-line.hovered {
-  stroke-width: 1.8px;
+  stroke-width: 2px;
   stroke-dasharray: none;
-  filter: drop-shadow(0 0 3px rgba(59, 201, 219, 0.7));
+  filter: drop-shadow(0 0 4px rgba(59, 201, 219, 0.8));
 }
 .stage-guide-line.dragging {
   stroke: #ffd43b !important;
-  stroke-width: 1.7px;
+  stroke-width: 2px;
   stroke-dasharray: none;
 }
 .stage-guide-line.will-delete {
   stroke: #ff6b6b !important;
-  stroke-width: 1.7px;
+  stroke-width: 2px;
   stroke-dasharray: 3 3;
 }
 .stage-guide-line.active-snap {
   stroke: #ff6b6b !important;
-  stroke-width: 1.8px;
+  stroke-width: 2.2px;
   stroke-dasharray: none;
+  filter: drop-shadow(0 0 5px rgba(255, 107, 107, 0.75));
+}
+.stage-grid-snap-line {
+  stroke: #ffd43b;
+  stroke-width: 1.6px;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+.stage-gizmo-snap-edge {
+  fill: none;
+  stroke: #ff6b6b;
+  stroke-width: 2.8px;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.stage-gizmo-snap-edge.grid-edge {
+  stroke: #ffd43b;
 }
 .stage-guide-hit {
   fill: rgba(0, 0, 0, 0.002);
