@@ -1,14 +1,13 @@
 'use strict';
 
 // ============================================================
-//  stage.js — Редактор сцены (v0.5.0):
+//  stage.js — Редактор сцены (v0.6.0):
 //    • Два режима редактора (Малиновый: Анимация объектов / Зелёный: Сцена)
 //    • Скрытие ключевого таймлайна в режиме Сцены + сворачивание нижней панели
 //    • Встроенный слой «Бэкграунд» (свойства свёрнуты по умолчанию)
-//    • Фрэйм игры 1366×768 и чистый полноэкранный Предпросмотр без UI (выход по ESC)
-//    • Inkscape-линейки и вытягиваемые мышкой Направляющие (привязка к сетке +
-//      привязка объектов к направляющим по Bounding Box и единому Pivot Point)
-//    • Относительная резиновая привязка (0..1) + метаданные катсцен и интерактива
+//    • Фрэйм игры 1366×768 и полноэкранный Предпросмотр (выход по ESC + опциональный FPS нагрузки)
+//    • Тактильные направляющие с курсором-рукой, меню направляющих (цвет/прозрачность/список) и сетка макета
+//    • Кастомное ПКМ-меню слоёв/объектов/направляющих, сворачивание папок, групповое выравнивание и свойства
 // ============================================================
 
 // -------- 2D аффинная математика для точного расчёта границ и единого пивота --------
@@ -139,6 +138,17 @@ function ensureStageStructure(stageObj, fallbackName) {
       pos: Number(g.pos)
     }));
 
+  if (!s.guideStyle || typeof s.guideStyle !== 'object') {
+    s.guideStyle = { color: '#3bc9db', opacity: 0.88 };
+  } else {
+    s.guideStyle.color = (typeof s.guideStyle.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(s.guideStyle.color))
+      ? s.guideStyle.color
+      : '#3bc9db';
+    s.guideStyle.opacity = isFinite(Number(s.guideStyle.opacity))
+      ? clamp(Number(s.guideStyle.opacity), 0.15, 1)
+      : 0.88;
+  }
+
   if (!Array.isArray(s.items)) s.items = [];
   for (let i = 0; i < s.items.length; i++) {
     const it = s.items[i];
@@ -147,7 +157,10 @@ function ensureStageStructure(stageObj, fallbackName) {
     it.parent = it.parent || null;
     if (it.visible === undefined) it.visible = true;
     if (it.opacity === undefined) it.opacity = 1;
-    if (it.isGroup) continue;
+    if (it.isGroup) {
+      it.editorOnly = !!it.editorOnly;
+      continue;
+    }
 
     if (!it.type) it.type = it.objectName ? 'object' : 'asset';
     if (!it.anchor || typeof it.anchor !== 'object') {
@@ -1087,6 +1100,17 @@ function evaluateStageAnimationsAtTime(globalTimeSec) {
 
 // -------- Полноэкранный Предпросмотр сцены 1366×768 без UI (выход по ESC) --------
 
+const PREF_STAGE_PREVIEW_FPS = 'animEditor.stagePreviewFps';
+
+function syncStagePreviewFpsHudVisibility() {
+  if (!els.stagePreviewFpsHud) return;
+  const showHud = !!(App.stage.playing && App.stage.previewFullscreen && App.stage.showPreviewFps);
+  els.stagePreviewFpsHud.hidden = !showHud;
+  if (showHud && !els.stagePreviewFpsHud.textContent) {
+    els.stagePreviewFpsHud.textContent = '60 FPS · замер нагрузки…';
+  }
+}
+
 function updateStagePreviewUI() {
   const on = !!App.stage.playing;
   if (els.stagePlay) els.stagePlay.classList.toggle('playing', on);
@@ -1097,6 +1121,16 @@ function updateStagePreviewUI() {
   if (els.stageFpsBadge) {
     els.stageFpsBadge.hidden = !(on && !App.stage.previewFullscreen);
   }
+  syncStagePreviewFpsHudVisibility();
+}
+
+function countActiveAnimatedStageObjects() {
+  if (!App.stage.data || !Array.isArray(App.stage.data.items)) return 0;
+  let cnt = 0;
+  for (const it of App.stage.data.items) {
+    if (!it.isGroup && isStageItemVisible(it)) cnt++;
+  }
+  return cnt;
 }
 
 function startStageAnimationLoop() {
@@ -1105,27 +1139,57 @@ function startStageAnimationLoop() {
   App.stage.lastTs = 0;
   App.stage.time = 0;
   App.stage.fpsSamples = [];
+  const dtSamples = [];
+  const evalSamples = [];
   updateStagePreviewUI();
 
   function tick(ts) {
     if (!App.stage.playing) return;
+    let dtMs = 0;
     if (App.stage.lastTs > 0) {
-      const dtMs = ts - App.stage.lastTs;
+      dtMs = ts - App.stage.lastTs;
       const dt = Math.min(0.1, Math.max(0, dtMs / 1000));
       App.stage.time += dt * (App.stage.speed || 1);
-      if (dtMs > 0 && els.stageFpsBadge && !App.stage.previewFullscreen) {
-        const samples = App.stage.fpsSamples;
-        samples.push(1000 / dtMs);
-        if (samples.length > 20) samples.shift();
-        if ((samples.length & 3) === 0) {
-          let sum = 0;
-          for (let i = 0; i < samples.length; i++) sum += samples[i];
-          els.stageFpsBadge.textContent = Math.min(60, Math.round(sum / samples.length)) + ' FPS';
+    }
+    App.stage.lastTs = ts;
+
+    const tEval0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    evaluateStageAnimationsAtTime(App.stage.time);
+    const evalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - tEval0;
+
+    if (dtMs > 0.2) {
+      const samples = App.stage.fpsSamples;
+      samples.push(1000 / dtMs);
+      dtSamples.push(dtMs);
+      evalSamples.push(evalMs);
+      if (samples.length > 24) samples.shift();
+      if (dtSamples.length > 24) dtSamples.shift();
+      if (evalSamples.length > 24) evalSamples.shift();
+
+      if ((samples.length & 3) === 0) {
+        let sumFps = 0, sumDt = 0, sumEv = 0;
+        for (let i = 0; i < samples.length; i++) {
+          sumFps += samples[i];
+          sumDt  += dtSamples[i];
+          sumEv  += evalSamples[i];
+        }
+        const avgFps = Math.round(sumFps / samples.length);
+        const avgDt  = sumDt / samples.length;
+        const avgEv  = sumEv / samples.length;
+
+        if (els.stageFpsBadge && !App.stage.previewFullscreen) {
+          els.stageFpsBadge.textContent = avgFps + ' FPS';
+        }
+        if (els.stagePreviewFpsHud && App.stage.previewFullscreen && App.stage.showPreviewFps) {
+          const visLayers = countActiveAnimatedStageObjects();
+          els.stagePreviewFpsHud.hidden = false;
+          els.stagePreviewFpsHud.classList.toggle('fps-warn', avgFps < 50 && avgFps >= 30);
+          els.stagePreviewFpsHud.classList.toggle('fps-low', avgFps < 30);
+          els.stagePreviewFpsHud.textContent =
+            avgFps + ' FPS · кадр ' + avgDt.toFixed(1) + ' мс · риг ' + avgEv.toFixed(2) + ' мс · ' + visLayers + ' сл.';
         }
       }
     }
-    App.stage.lastTs = ts;
-    evaluateStageAnimationsAtTime(App.stage.time);
     App.stage.raf = requestAnimationFrame(tick);
   }
 
@@ -1487,6 +1551,47 @@ function renderStageRulersCanvas(metrics) {
   }
 }
 
+const GUIDE_HIT_BAND = 12;
+
+function getStageGuideStyle() {
+  const gs = (App.stage.data && App.stage.data.guideStyle) || {};
+  return {
+    color: (typeof gs.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(gs.color)) ? gs.color : '#3bc9db',
+    opacity: isFinite(Number(gs.opacity)) ? clamp(Number(gs.opacity), 0.15, 1) : 0.88,
+  };
+}
+
+function findStageGuideNearClient(clientX, clientY, pxTol) {
+  if (App.editorMode !== 'stage' || !App.stage.showRulers || App.stage.previewFullscreen || !App.stage.data || !els.viewport) {
+    return null;
+  }
+  const guides = App.stage.data.guides || [];
+  if (!guides.length) return null;
+  const rect = els.viewport.getBoundingClientRect();
+  const lx = clientX - rect.left;
+  const ly = clientY - rect.top;
+  if (lx < RULER_THICK || ly < RULER_THICK || lx > rect.width || ly > rect.height) return null;
+
+  const m = getStageFrameMetrics();
+  const tol = pxTol || 6;
+  let best = null;
+  let bestDist = tol;
+  for (let i = 0; i < guides.length; i++) {
+    const g = guides[i];
+    const wCoord = guideToWorldCoord(g, m);
+    const scr = worldToViewportScreen(
+      g.axis === 'v' ? wCoord : 0,
+      g.axis === 'h' ? wCoord : 0
+    );
+    const d = g.axis === 'v' ? Math.abs(lx - scr.x) : Math.abs(ly - scr.y);
+    if (d <= bestDist) {
+      bestDist = d;
+      best = g;
+    }
+  }
+  return best;
+}
+
 function renderStageGuidesOverlay(metrics) {
   const svg = els.stageGuidesSvg;
   if (!svg) return;
@@ -1501,6 +1606,7 @@ function renderStageGuidesOverlay(metrics) {
   const m = metrics || getStageFrameMetrics();
   const guides = App.stage.data.guides || [];
   const activeSnapSet = new Set(App.stage.activeSnapGuides || []);
+  const style = getStageGuideStyle();
 
   for (let i = 0; i < guides.length; i++) {
     const g = guides[i];
@@ -1509,15 +1615,24 @@ function renderStageGuidesOverlay(metrics) {
       g.axis === 'v' ? wCoord : 0,
       g.axis === 'h' ? wCoord : 0
     );
-    const isDragging = _guideDrag && _guideDrag.guide && _guideDrag.guide.id === g.id;
-    const isSnapped  = activeSnapSet.has(g.id);
+    const isDragging   = _guideDrag && _guideDrag.guide && _guideDrag.guide.id === g.id;
+    const willDelete   = !!(isDragging && _guideDrag.willDelete);
+    const isSnapped    = activeSnapSet.has(g.id);
+    const isHovered    = !isDragging && App.stage.hoveredGuideId === g.id;
 
     const line = document.createElementNS(SVG_NS, 'line');
-    const hit  = document.createElementNS(SVG_NS, 'line');
+    const hit  = document.createElementNS(SVG_NS, 'rect');
     const cls = 'stage-guide-line' +
+      (isHovered ? ' hovered' : '') +
       (isDragging ? ' dragging' : '') +
+      (willDelete ? ' will-delete' : '') +
       (isSnapped ? ' active-snap' : '');
     line.setAttribute('class', cls);
+    if (!isDragging && !willDelete && !isSnapped) {
+      line.style.stroke = style.color;
+      line.style.strokeOpacity = String(isHovered ? 1 : style.opacity);
+    }
+
     hit.setAttribute('class', 'stage-guide-hit ' + (g.axis === 'v' ? 'guide-v' : 'guide-h'));
     hit.dataset.guideId = g.id;
 
@@ -1527,41 +1642,46 @@ function renderStageGuidesOverlay(metrics) {
       line.setAttribute('y1', '0');
       line.setAttribute('x2', String(x));
       line.setAttribute('y2', String(vpH));
-      hit.setAttribute('x1', String(x));
-      hit.setAttribute('y1', String(RULER_THICK));
-      hit.setAttribute('x2', String(x));
-      hit.setAttribute('y2', String(vpH));
+
+      hit.setAttribute('x', String(Math.round(scr.x - GUIDE_HIT_BAND / 2)));
+      hit.setAttribute('y', String(RULER_THICK));
+      hit.setAttribute('width', String(GUIDE_HIT_BAND));
+      hit.setAttribute('height', String(Math.max(1, vpH - RULER_THICK)));
     } else {
       const y = Math.round(scr.y) + 0.5;
       line.setAttribute('x1', '0');
       line.setAttribute('y1', String(y));
       line.setAttribute('x2', String(vpW));
       line.setAttribute('y2', String(y));
-      hit.setAttribute('x1', String(RULER_THICK));
-      hit.setAttribute('y1', String(y));
-      hit.setAttribute('x2', String(vpW));
-      hit.setAttribute('y2', String(y));
+
+      hit.setAttribute('x', String(RULER_THICK));
+      hit.setAttribute('y', String(Math.round(scr.y - GUIDE_HIT_BAND / 2)));
+      hit.setAttribute('width', String(Math.max(1, vpW - RULER_THICK)));
+      hit.setAttribute('height', String(GUIDE_HIT_BAND));
     }
 
     svg.appendChild(line);
     svg.appendChild(hit);
 
-    if (isDragging) {
+    if (isDragging || isHovered) {
       const pxFromEdge = g.axis === 'v' ? (wCoord + m.fw / 2) : (wCoord + m.fh / 2);
-      const label = (g.axis === 'v' ? 'X: ' : 'Y: ') +
-        Math.round(pxFromEdge) + ' px (' + (g.pos * 100).toFixed(1) + '%)';
-      const bx = g.axis === 'v' ? clamp(scr.x + 8, 28, vpW - 148) : 28;
-      const by = g.axis === 'h' ? clamp(scr.y - 24, 24, vpH - 28) : 26;
+      const label = willDelete
+        ? 'Убрать обратно в линейку (удалить)'
+        : ((g.axis === 'v' ? 'X: ' : 'Y: ') + Math.round(pxFromEdge) + ' px (' + (g.pos * 100).toFixed(1) + '%)');
+      const bw = willDelete ? 220 : 148;
+      const bx = g.axis === 'v' ? clamp(scr.x + 10, 28, Math.max(28, vpW - bw - 8)) : 28;
+      const by = g.axis === 'h' ? clamp(scr.y - 24, 24, Math.max(24, vpH - 28)) : 26;
       const bgRect = document.createElementNS(SVG_NS, 'rect');
-      bgRect.setAttribute('class', 'stage-guide-badge-bg dragging');
+      bgRect.setAttribute('class', 'stage-guide-badge-bg' + (isDragging ? ' dragging' : '') + (willDelete ? ' will-delete' : ''));
+      if (!isDragging && !willDelete) bgRect.style.stroke = style.color;
       bgRect.setAttribute('x', String(bx));
       bgRect.setAttribute('y', String(by));
-      bgRect.setAttribute('width', '138');
-      bgRect.setAttribute('height', '18');
+      bgRect.setAttribute('width', String(bw));
+      bgRect.setAttribute('height', '19');
       const txt = document.createElementNS(SVG_NS, 'text');
       txt.setAttribute('class', 'stage-guide-badge-text');
       txt.setAttribute('x', String(bx + 6));
-      txt.setAttribute('y', String(by + 12));
+      txt.setAttribute('y', String(by + 13));
       txt.textContent = label;
       svg.appendChild(bgRect);
       svg.appendChild(txt);
@@ -1655,42 +1775,282 @@ function computeGuideSnapAdjustment(snapshots, dwx, dwy, metrics) {
   };
 }
 
+function snapGuideWorldCoord(axis, wCoord) {
+  if (!App.grid.snap) return wCoord;
+  if (typeof App.snapWorldToGrid === 'function') {
+    const snapped = App.snapWorldToGrid(axis === 'v' ? wCoord : 0, axis === 'h' ? wCoord : 0);
+    return axis === 'v' ? snapped.x : snapped.y;
+  }
+  const step = App.grid.step || 4;
+  return Math.round(wCoord / step) * step;
+}
+
+function deleteStageGuideById(guideId) {
+  if (!App.stage.data || !guideId) return;
+  const before = App.stage.data.guides.length;
+  App.stage.data.guides = App.stage.data.guides.filter(x => x.id !== guideId);
+  if (App.stage.hoveredGuideId === guideId) App.stage.hoveredGuideId = null;
+  if (App.stage.data.guides.length !== before) {
+    markStageDirty();
+    renderStageGuidesOverlay();
+    if (App.stage.selectedId === '__bg__') renderStageProperties();
+    if (els.guidesSettingsPopover && !els.guidesSettingsPopover.hidden) renderGuidesSettingsPopover();
+    setHint('Направляющая удалена', 1400);
+  }
+}
+
+function clearAllStageGuides() {
+  if (!App.stage.data || !App.stage.data.guides.length) return;
+  App.stage.data.guides = [];
+  App.stage.hoveredGuideId = null;
+  markStageDirty();
+  renderStageGuidesOverlay();
+  if (App.stage.selectedId === '__bg__') renderStageProperties();
+  if (els.guidesSettingsPopover && !els.guidesSettingsPopover.hidden) renderGuidesSettingsPopover();
+  setHint('Все направляющие сцены очищены', 1600);
+}
+
+function closeGuidesSettingsPopover() {
+  if (els.guidesSettingsPopover) els.guidesSettingsPopover.hidden = true;
+  if (els.btnStageGuidesMenu) els.btnStageGuidesMenu.classList.remove('active');
+}
+
+function toggleGuidesSettingsPopover(anchorEl) {
+  const pop = els.guidesSettingsPopover;
+  if (!pop || !App.stage.data) return;
+  if (!pop.hidden) {
+    closeGuidesSettingsPopover();
+    return;
+  }
+  if (typeof closeGridSettingsPopover === 'function') closeGridSettingsPopover();
+  closeStageContextMenu();
+
+  renderGuidesSettingsPopover();
+  pop.hidden = false;
+  if (els.btnStageGuidesMenu) els.btnStageGuidesMenu.classList.add('active');
+
+  const btn = anchorEl || els.btnStageGuidesMenu;
+  if (btn && btn.getBoundingClientRect) {
+    const r = btn.getBoundingClientRect();
+    const left = clamp(r.left, 8, Math.max(8, window.innerWidth - 300));
+    const top  = clamp(r.bottom + 6, 8, Math.max(8, window.innerHeight - 400));
+    pop.style.left = left + 'px';
+    pop.style.top  = top + 'px';
+  }
+}
+
+function renderGuidesSettingsPopover() {
+  const pop = els.guidesSettingsPopover;
+  if (!pop || !App.stage.data) return;
+  const st = App.stage.data;
+  const style = getStageGuideStyle();
+  const opPct = Math.round(style.opacity * 100);
+  const swatches = ['#3bc9db', '#ffd43b', '#ff6b6b', '#51cf66', '#cc5de8', '#ffffff'];
+  const m = getStageFrameMetrics();
+  const guides = st.guides || [];
+
+  let listHtml = '';
+  if (!guides.length) {
+    listHtml = '<li class="empty">Направляющих пока нет — потяните мышкой с верхней или левой линейки</li>';
+  } else {
+    for (const g of guides) {
+      const wCoord = guideToWorldCoord(g, m);
+      const px = Math.round(g.axis === 'v' ? (wCoord + m.fw / 2) : (wCoord + m.fh / 2));
+      const axisBadge = g.axis === 'v' ? 'Верт. X' : 'Гориз. Y';
+      listHtml +=
+        '<li>' +
+          '<span>' + axisBadge + ': ' + px + ' px (' + (g.pos * 100).toFixed(1) + '%)</span>' +
+          '<button type="button" class="guide-del-x" data-del-guide="' + escapeHtmlAttr(g.id) + '" title="Удалить эту направляющую">' +
+            '<span class="material-icons" style="font-size:14px">close</span>' +
+          '</button>' +
+        '</li>';
+    }
+  }
+
+  pop.innerHTML =
+    '<div class="popover-head">' +
+      '<span>Меню направляющих (' + guides.length + ')</span>' +
+      '<button type="button" class="guide-del-x" data-gmenu-act="close" title="Закрыть"><span class="material-icons" style="font-size:15px">close</span></button>' +
+    '</div>' +
+    '<div class="popover-section" style="display:flex;gap:10px;align-items:center">' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" data-gmenu-chk="rulers" ' + (App.stage.showRulers ? 'checked' : '') + '> Линейки</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" data-gmenu-chk="snap" ' + (App.stage.guideSnap ? 'checked' : '') + '> Привязка BBox + Pivot</label>' +
+    '</div>' +
+    '<div class="popover-section">' +
+      '<span class="popover-label">Цвет и прозрачность (<span data-gmenu-op-lbl>' + opPct + '%</span>):</span>' +
+      '<div class="swatch-row" style="margin-bottom:6px">' +
+        swatches.map(c => '<button type="button" class="color-swatch' + (style.color.toLowerCase() === c ? ' active' : '') + '" style="background:' + c + '" data-gmenu-color="' + c + '" title="' + c + '"></button>').join('') +
+        '<input type="color" value="' + style.color + '" data-gmenu-input="color" style="width:26px;height:22px;padding:0;border:none;background:transparent;cursor:pointer">' +
+      '</div>' +
+      '<input type="range" min="15" max="100" step="1" value="' + opPct + '" data-gmenu-input="opacity" style="width:100%">' +
+    '</div>' +
+    '<div class="popover-section">' +
+      '<span class="popover-label">Быстрая разметка макета:</span>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
+        '<button type="button" class="btn small" data-gmenu-preset="center">+ Центр 50%</button>' +
+        '<button type="button" class="btn small" data-gmenu-preset="thirds">+ Трети</button>' +
+        '<button type="button" class="btn small" data-gmenu-preset="safe">+ Поля 5%</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="popover-section">' +
+      '<span class="popover-label">Список направляющих на сцене:</span>' +
+      '<ul class="guide-list-mini">' + listHtml + '</ul>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;gap:6px">' +
+      '<button type="button" class="btn small danger" data-gmenu-act="clear"' + (guides.length ? '' : ' disabled') + '>Очистить все</button>' +
+      '<button type="button" class="btn small primary" data-gmenu-act="close">Готово</button>' +
+    '</div>';
+
+  pop.querySelectorAll('[data-gmenu-chk]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const k = chk.getAttribute('data-gmenu-chk');
+      if (k === 'rulers') {
+        App.stage.showRulers = !!chk.checked;
+        if (els.btnStageRulers) els.btnStageRulers.classList.toggle('active', App.stage.showRulers);
+        renderStageRulersAndGuides();
+      } else if (k === 'snap') {
+        App.stage.guideSnap = !!chk.checked;
+        if (els.btnStageGuideSnap) els.btnStageGuideSnap.classList.toggle('active', App.stage.guideSnap);
+      }
+    });
+  });
+
+  pop.querySelectorAll('[data-gmenu-color]').forEach(sw => {
+    sw.addEventListener('click', () => {
+      st.guideStyle.color = sw.getAttribute('data-gmenu-color');
+      markStageDirty();
+      renderStageGuidesOverlay();
+      renderGuidesSettingsPopover();
+    });
+  });
+
+  const colorInp = pop.querySelector('[data-gmenu-input="color"]');
+  if (colorInp) {
+    colorInp.addEventListener('input', () => {
+      st.guideStyle.color = colorInp.value;
+      markStageDirty();
+      renderStageGuidesOverlay();
+    });
+  }
+
+  const opInp = pop.querySelector('[data-gmenu-input="opacity"]');
+  const opLbl = pop.querySelector('[data-gmenu-op-lbl]');
+  if (opInp) {
+    opInp.addEventListener('input', () => {
+      const pct = clamp(parseInt(opInp.value, 10) || 88, 15, 100);
+      st.guideStyle.opacity = pct / 100;
+      if (opLbl) opLbl.textContent = pct + '%';
+      markStageDirty();
+      renderStageGuidesOverlay();
+    });
+  }
+
+  pop.querySelectorAll('[data-gmenu-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.getAttribute('data-gmenu-preset');
+      const addG = (axis, pos) => {
+        if (!st.guides.some(g => g.axis === axis && Math.abs(g.pos - pos) < 0.0005)) {
+          st.guides.push({ id: nextStageGuideId(), axis, pos });
+        }
+      };
+      if (p === 'center') {
+        addG('v', 0.5); addG('h', 0.5);
+      } else if (p === 'thirds') {
+        addG('v', 1 / 3); addG('v', 2 / 3);
+        addG('h', 1 / 3); addG('h', 2 / 3);
+      } else if (p === 'safe') {
+        addG('v', 0.05); addG('v', 0.95);
+        addG('h', 0.05); addG('h', 0.95);
+      }
+      markStageDirty();
+      renderStageGuidesOverlay();
+      if (App.stage.selectedId === '__bg__') renderStageProperties();
+      renderGuidesSettingsPopover();
+    });
+  });
+
+  pop.querySelectorAll('[data-del-guide]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      deleteStageGuideById(btn.getAttribute('data-del-guide'));
+    });
+  });
+
+  pop.querySelectorAll('[data-gmenu-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.getAttribute('data-gmenu-act');
+      if (act === 'clear') clearAllStageGuides();
+      else closeGuidesSettingsPopover();
+    });
+  });
+}
+
+function startExistingGuideDrag(guide, e) {
+  if (!guide) return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeStageContextMenu();
+  App.stage.hoveredGuideId = guide.id;
+  _guideDrag = {
+    guide,
+    isNew: false,
+    leftRulerOnce: true,
+    willDelete: false,
+  };
+  document.body.classList.add('guide-dragging');
+  renderStageGuidesOverlay();
+}
+
 function startGuideDragFromRuler(axis, e) {
   if (App.editorMode !== 'stage' || !App.stage.data || e.button !== 0) return;
   e.preventDefault();
   e.stopPropagation();
+  closeStageContextMenu();
   const m = getStageFrameMetrics();
   const w = clientToStageWorld(e.clientX, e.clientY, false);
-  let wCoord = (axis === 'v') ? w.x : w.y;
-  if (App.grid.snap) {
-    const step = App.grid.step || 4;
-    wCoord = Math.round(wCoord / step) * step;
-  }
+  const wCoord = snapGuideWorldCoord(axis, (axis === 'v') ? w.x : w.y);
   const guide = {
     id: nextStageGuideId(),
     axis,
     pos: worldCoordToGuidePos(axis, wCoord, m)
   };
   App.stage.data.guides.push(guide);
-  _guideDrag = { guide, isNew: true };
+  App.stage.hoveredGuideId = guide.id;
+  _guideDrag = {
+    guide,
+    isNew: true,
+    leftRulerOnce: false,
+    willDelete: false,
+  };
+  document.body.classList.add('guide-dragging');
   renderStageGuidesOverlay(m);
 }
 
 function setupStageRulersAndGuidesInteraction() {
   if (els.stageRulerH) {
     els.stageRulerH.addEventListener('mousedown', (e) => startGuideDragFromRuler('h', e));
+    els.stageRulerH.addEventListener('contextmenu', (e) => {
+      if (App.editorMode !== 'stage' || !App.stage.data) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openStageRulerOrGuideContextMenu(e.clientX, e.clientY, null, 'h');
+    });
   }
   if (els.stageRulerV) {
     els.stageRulerV.addEventListener('mousedown', (e) => startGuideDragFromRuler('v', e));
+    els.stageRulerV.addEventListener('contextmenu', (e) => {
+      if (App.editorMode !== 'stage' || !App.stage.data) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openStageRulerOrGuideContextMenu(e.clientX, e.clientY, null, 'v');
+    });
   }
   if (els.stageRulerCorner) {
+    els.stageRulerCorner.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleGuidesSettingsPopover(els.stageRulerCorner);
+    });
     els.stageRulerCorner.addEventListener('dblclick', () => {
-      if (!App.stage.data || !App.stage.data.guides.length) return;
-      App.stage.data.guides = [];
-      markStageDirty();
-      renderStageGuidesOverlay();
-      if (App.stage.selectedId === '__bg__') renderStageProperties();
-      setHint('Все направляющие сцены очищены', 1600);
+      clearAllStageGuides();
     });
   }
 
@@ -1698,13 +2058,23 @@ function setupStageRulersAndGuidesInteraction() {
     els.stageGuidesSvg.addEventListener('mousedown', (e) => {
       if (App.editorMode !== 'stage' || !App.stage.data || e.button !== 0) return;
       const hit = e.target && e.target.closest ? e.target.closest('[data-guide-id]') : null;
-      if (!hit) return;
-      const g = App.stage.data.guides.find(x => x.id === hit.dataset.guideId);
+      const g = hit
+        ? App.stage.data.guides.find(x => x.id === hit.dataset.guideId)
+        : findStageGuideNearClient(e.clientX, e.clientY, 6);
+      if (!g) return;
+      startExistingGuideDrag(g, e);
+    });
+
+    els.stageGuidesSvg.addEventListener('contextmenu', (e) => {
+      if (App.editorMode !== 'stage' || !App.stage.data) return;
+      const hit = e.target && e.target.closest ? e.target.closest('[data-guide-id]') : null;
+      const g = hit
+        ? App.stage.data.guides.find(x => x.id === hit.dataset.guideId)
+        : findStageGuideNearClient(e.clientX, e.clientY, 7);
       if (!g) return;
       e.preventDefault();
       e.stopPropagation();
-      _guideDrag = { guide: g, isNew: false };
-      renderStageGuidesOverlay();
+      openStageRulerOrGuideContextMenu(e.clientX, e.clientY, g, g.axis);
     });
 
     els.stageGuidesSvg.addEventListener('dblclick', (e) => {
@@ -1713,11 +2083,7 @@ function setupStageRulersAndGuidesInteraction() {
       if (!hit) return;
       e.preventDefault();
       e.stopPropagation();
-      App.stage.data.guides = App.stage.data.guides.filter(x => x.id !== hit.dataset.guideId);
-      markStageDirty();
-      renderStageGuidesOverlay();
-      if (App.stage.selectedId === '__bg__') renderStageProperties();
-      setHint('Направляющая удалена', 1400);
+      deleteStageGuideById(hit.dataset.guideId);
     });
   }
 
@@ -1736,17 +2102,34 @@ function setupStageRulersAndGuidesInteraction() {
           ? ('translateY(' + Math.round(sy) + 'px)')
           : 'translateY(-100px)';
       }
+
+      if (!_guideDrag) {
+        const nearG = findStageGuideNearClient(e.clientX, e.clientY, 6);
+        const nextHoverId = nearG ? nearG.id : null;
+        if (App.stage.hoveredGuideId !== nextHoverId) {
+          App.stage.hoveredGuideId = nextHoverId;
+          renderStageGuidesOverlay();
+        }
+      }
     }
 
-    if (!_guideDrag || !App.stage.data) return;
+    if (!_guideDrag || !App.stage.data || !els.viewport) return;
+    const rect = els.viewport.getBoundingClientRect();
+    const localX = e.clientX - rect.left;
+    const localY = e.clientY - rect.top;
+    const overRulerOrOutside =
+      (_guideDrag.guide.axis === 'h' && localY <= RULER_THICK) ||
+      (_guideDrag.guide.axis === 'v' && localX <= RULER_THICK) ||
+      localX < 0 || localY < 0 || localX > rect.width || localY > rect.height;
+
+    if (!overRulerOrOutside) {
+      _guideDrag.leftRulerOnce = true;
+    }
+    _guideDrag.willDelete = overRulerOrOutside && (!_guideDrag.isNew || _guideDrag.leftRulerOnce);
+
     const m = getStageFrameMetrics();
     const w = clientToStageWorld(e.clientX, e.clientY, false);
-    let wCoord = (_guideDrag.guide.axis === 'v') ? w.x : w.y;
-    // Привязка самой направляющей к сетке при активной кнопке привязки к сетке
-    if (App.grid.snap) {
-      const step = App.grid.step || 4;
-      wCoord = Math.round(wCoord / step) * step;
-    }
+    const wCoord = snapGuideWorldCoord(_guideDrag.guide.axis, (_guideDrag.guide.axis === 'v') ? w.x : w.y);
     _guideDrag.guide.pos = Math.round(worldCoordToGuidePos(_guideDrag.guide.axis, wCoord, m) * 100000) / 100000;
     renderStageGuidesOverlay(m);
   });
@@ -1755,6 +2138,7 @@ function setupStageRulersAndGuidesInteraction() {
     if (!_guideDrag) return;
     const d = _guideDrag;
     _guideDrag = null;
+    document.body.classList.remove('guide-dragging');
     if (!App.stage.data || !els.viewport) return;
 
     const rect = els.viewport.getBoundingClientRect();
@@ -1767,8 +2151,9 @@ function setupStageRulersAndGuidesInteraction() {
 
     if (droppedBackOnRuler) {
       App.stage.data.guides = App.stage.data.guides.filter(x => x.id !== d.guide.id);
-      if (!d.isNew) {
-        markStageDirty();
+      App.stage.hoveredGuideId = null;
+      if (!d.isNew || d.leftRulerOnce) {
+        if (!d.isNew) markStageDirty();
         setHint('Направляющая убрана обратно в линейку', 1500);
       }
     } else {
@@ -1776,6 +2161,7 @@ function setupStageRulersAndGuidesInteraction() {
     }
     renderStageGuidesOverlay();
     if (App.stage.selectedId === '__bg__') renderStageProperties();
+    if (els.guidesSettingsPopover && !els.guidesSettingsPopover.hidden) renderGuidesSettingsPopover();
   });
 }
 
@@ -1810,12 +2196,34 @@ const StageGizmo = (function () {
       return;
     }
 
+    const metrics = getStageFrameMetrics();
     const leaves = getSelectedTransformLeafItems();
+    const leafIdSet = new Set(leaves.map(it => it.id));
+
+    // Контур при наведении мыши на невыделенный объект на сцене (видна рамка и единый Pivot до клика)
+    if (!drag && App.stage.hoveredId && !leafIdSet.has(App.stage.hoveredId)) {
+      const hovItem = App.stage.data.items.find(x => x.id === App.stage.hoveredId);
+      if (hovItem && !hovItem.isGroup && isStageItemVisible(hovItem)) {
+        const hb = getStageItemWorldAABB(hovItem, metrics);
+        const hpts = hb.corners.map(p => worldToViewportScreen(p.x, p.y));
+        const hd = 'M' + hpts[0].x + ' ' + hpts[0].y +
+                   'L' + hpts[1].x + ' ' + hpts[1].y +
+                   'L' + hpts[2].x + ' ' + hpts[2].y +
+                   'L' + hpts[3].x + ' ' + hpts[3].y + 'Z';
+        svg.appendChild(makeSvg('path', { d: hd, class: 'stage-gizmo-hover-box' }));
+        const hw = anchorToWorld(hovItem.anchor, metrics);
+        const hp = worldToViewportScreen(hw.x, hw.y);
+        svg.appendChild(makeSvg('circle', {
+          cx: hp.x, cy: hp.y, r: 4,
+          fill: 'rgba(15, 20, 26, 0.78)', stroke: '#66d9e8', 'stroke-width': 1.3,
+          style: 'pointer-events:none'
+        }));
+      }
+    }
+
     if (!leaves.length) return;
 
-    const metrics = getStageFrameMetrics();
-
-    // ОДИНОЧНЫЙ ЭЛЕМЕНТ: ориентированная рамка + единый верхнеуровневый Pivot Point + ручки скейла и поворота
+    // ОДИНОЧНЫЙ ЭЛЕМЕНТ: высококонтрастная двойная рамка Bounding Box + единый Pivot Point + ручки
     if (leaves.length === 1 && !(App.stage.selectedId && isStageFolderId(App.stage.selectedId))) {
       const it = leaves[0];
       if (!isStageItemVisible(it)) return;
@@ -1830,6 +2238,9 @@ const StageGizmo = (function () {
       interior.dataset.gizmo = 'move';
       svg.appendChild(interior);
 
+      // Тёмная подложка под рамку, чтобы рамка читалась на любом зелёном / светлом фоне
+      svg.appendChild(makeSvg('path', { d: dPath, class: 'stage-gizmo-box-halo' }));
+
       const box = makeSvg('path', { d: dPath, class: 'stage-gizmo-box' });
       box.dataset.gizmo = 'move';
       svg.appendChild(box);
@@ -1841,15 +2252,19 @@ const StageGizmo = (function () {
       const edgeLen = Math.hypot(edgeDx, edgeDy) || 1;
       const nx = edgeDy / edgeLen;
       const ny = -edgeDx / edgeLen;
-      const rotHx = topMidX + nx * 22;
-      const rotHy = topMidY + ny * 22;
+      const rotHx = topMidX + nx * 24;
+      const rotHy = topMidY + ny * 24;
 
       svg.appendChild(makeSvg('line', {
         x1: topMidX, y1: topMidY, x2: rotHx, y2: rotHy,
-        stroke: '#51cf66', 'stroke-width': 1.2
+        stroke: 'rgba(8, 12, 18, 0.85)', 'stroke-width': 3, style: 'pointer-events:none'
+      }));
+      svg.appendChild(makeSvg('line', {
+        x1: topMidX, y1: topMidY, x2: rotHx, y2: rotHy,
+        stroke: '#38d9a9', 'stroke-width': 1.4, style: 'pointer-events:none'
       }));
       const rotHandle = makeSvg('circle', {
-        cx: rotHx, cy: rotHy, r: 5.5, class: 'stage-gizmo-rot-handle'
+        cx: rotHx, cy: rotHy, r: 5.8, class: 'stage-gizmo-rot-handle'
       });
       rotHandle.dataset.gizmo = 'rotate';
       svg.appendChild(rotHandle);
@@ -1888,33 +2303,68 @@ const StageGizmo = (function () {
         svg.appendChild(eh);
       }
 
-      // Маркер ЕДИНОГО Pivot Point объекта (перетаскивание перемещает сам объект за его пивот)
+      // Компактный шильдик габаритов BBox (Ш × В px) под рамкой
+      const scrMinX = Math.min(pts[0].x, pts[1].x, pts[2].x, pts[3].x);
+      const scrMaxX = Math.max(pts[0].x, pts[1].x, pts[2].x, pts[3].x);
+      const scrMaxY = Math.max(pts[0].y, pts[1].y, pts[2].y, pts[3].y);
+      const dimTxt = Math.round(aabb.maxX - aabb.minX) + ' × ' + Math.round(aabb.maxY - aabb.minY) + ' px';
+      const dimW = Math.max(76, dimTxt.length * 6.3 + 12);
+      const dimX = (scrMinX + scrMaxX) / 2 - dimW / 2;
+      const dimY = scrMaxY + 8;
+      svg.appendChild(makeSvg('rect', {
+        x: dimX, y: dimY, width: dimW, height: 17, class: 'stage-gizmo-dim-bg'
+      }));
+      const dimEl = makeSvg('text', {
+        x: dimX + 6, y: dimY + 12, class: 'stage-gizmo-dim-text'
+      });
+      dimEl.textContent = dimTxt;
+      svg.appendChild(dimEl);
+
+      // Маркер ЕДИНОГО Pivot Point объекта (высококонтрастная мишень с ореолом)
       const wpos = anchorToWorld(it.anchor, metrics);
       const pScr = worldToViewportScreen(wpos.x, wpos.y);
       const pivG = makeSvg('g', { class: 'stage-gizmo-pivot' });
       pivG.dataset.gizmo = 'move';
       pivG.appendChild(makeSvg('circle', {
+        cx: pScr.x, cy: pScr.y, r: 8,
+        fill: 'rgba(10, 14, 20, 0.86)', stroke: 'rgba(10, 14, 20, 0.95)', 'stroke-width': 2.2
+      }));
+      pivG.appendChild(makeSvg('line', {
+        x1: pScr.x - 11, y1: pScr.y, x2: pScr.x + 11, y2: pScr.y,
+        stroke: 'rgba(10, 14, 20, 0.95)', 'stroke-width': 3
+      }));
+      pivG.appendChild(makeSvg('line', {
+        x1: pScr.x, y1: pScr.y - 11, x2: pScr.x, y2: pScr.y + 11,
+        stroke: 'rgba(10, 14, 20, 0.95)', 'stroke-width': 3
+      }));
+      pivG.appendChild(makeSvg('circle', {
         cx: pScr.x, cy: pScr.y, r: 6.5,
-        fill: 'rgba(15, 20, 26, 0.78)', stroke: '#ffd43b', 'stroke-width': 1.6
+        fill: 'rgba(255, 212, 59, 0.20)', stroke: '#ffd43b', 'stroke-width': 1.8
       }));
       pivG.appendChild(makeSvg('line', {
-        x1: pScr.x - 9, y1: pScr.y, x2: pScr.x + 9, y2: pScr.y,
-        stroke: '#ffd43b', 'stroke-width': 1.3
+        x1: pScr.x - 10, y1: pScr.y, x2: pScr.x + 10, y2: pScr.y,
+        stroke: '#ffd43b', 'stroke-width': 1.5
       }));
       pivG.appendChild(makeSvg('line', {
-        x1: pScr.x, y1: pScr.y - 9, x2: pScr.x, y2: pScr.y + 9,
-        stroke: '#ffd43b', 'stroke-width': 1.3
+        x1: pScr.x, y1: pScr.y - 10, x2: pScr.x, y2: pScr.y + 10,
+        stroke: '#ffd43b', 'stroke-width': 1.5
+      }));
+      pivG.appendChild(makeSvg('circle', {
+        cx: pScr.x, cy: pScr.y, r: 2.1,
+        fill: '#ffffff', stroke: 'none'
       }));
       svg.appendChild(pivG);
       return;
     }
 
-    // ГРУППОВОЕ ВЫДЕЛЕНИЕ (папка или несколько объектов)
+    // ГРУППОВОЕ ВЫДЕЛЕНИЕ (папка или несколько объектов): суб-рамки участников + общая рамка группы
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     let visCount = 0;
+    const memberBoxes = [];
     for (const it of leaves) {
       if (!isStageItemVisible(it)) continue;
       const b = getStageItemWorldAABB(it, metrics);
+      memberBoxes.push({ it, b });
       if (b.minX < minX) minX = b.minX;
       if (b.minY < minY) minY = b.minY;
       if (b.maxX > maxX) maxX = b.maxX;
@@ -1934,6 +2384,27 @@ const StageGizmo = (function () {
     });
     interior.dataset.gizmo = 'group-move';
     svg.appendChild(interior);
+
+    // Тонкие индивидуальные рамки и точки пивотов каждого объекта внутри группы
+    for (const mb of memberBoxes) {
+      const mpts = mb.b.corners.map(p => worldToViewportScreen(p.x, p.y));
+      const md = 'M' + mpts[0].x + ' ' + mpts[0].y +
+                 'L' + mpts[1].x + ' ' + mpts[1].y +
+                 'L' + mpts[2].x + ' ' + mpts[2].y +
+                 'L' + mpts[3].x + ' ' + mpts[3].y + 'Z';
+      svg.appendChild(makeSvg('path', { d: md, class: 'stage-gizmo-subbox' }));
+      const mw = anchorToWorld(mb.it.anchor, metrics);
+      const mp = worldToViewportScreen(mw.x, mw.y);
+      svg.appendChild(makeSvg('circle', {
+        cx: mp.x, cy: mp.y, r: 3.2,
+        fill: '#13171e', stroke: '#ffd43b', 'stroke-width': 1.3,
+        style: 'pointer-events:none'
+      }));
+    }
+
+    svg.appendChild(makeSvg('rect', {
+      x: gx, y: gy, width: gw, height: gh, class: 'stage-gizmo-box-halo'
+    }));
 
     const gBox = makeSvg('rect', {
       x: gx, y: gy, width: gw, height: gh, class: 'stage-gizmo-box group-box'
@@ -2020,15 +2491,20 @@ const StageGizmo = (function () {
     dwx = gSnap.dwx;
     dwy = gSnap.dwy;
 
-    // 2) Привязка к сетке по не привязанным к направляющим осям (если включён #btn-snap)
+    // 2) Привязка к сетке по не привязанным к направляющим осям (с учётом шага и начала координат сетки)
+    if (App.grid.snap && drag.snapshots.length > 0) {
+      const ref0 = drag.snapshots[0].wpos0;
+      const cand = { x: ref0.x + dwx, y: ref0.y + dwy };
+      const snapped = (typeof App.snapWorldToGrid === 'function')
+        ? App.snapWorldToGrid(cand.x, cand.y)
+        : { x: Math.round(cand.x / (App.grid.step || 4)) * (App.grid.step || 4), y: Math.round(cand.y / (App.grid.step || 4)) * (App.grid.step || 4) };
+      if (!gSnap.snappedX) dwx += (snapped.x - cand.x);
+      if (!gSnap.snappedY) dwy += (snapped.y - cand.y);
+    }
+
     for (const snap of drag.snapshots) {
-      let nx = snap.wpos0.x + dwx;
-      let ny = snap.wpos0.y + dwy;
-      if (App.grid.snap && drag.snapshots.length === 1) {
-        const step = App.grid.step || 4;
-        if (!gSnap.snappedX) nx = Math.round(nx / step) * step;
-        if (!gSnap.snappedY) ny = Math.round(ny / step) * step;
-      }
+      const nx = snap.wpos0.x + dwx;
+      const ny = snap.wpos0.y + dwy;
       snap.item.anchor = worldToAnchor(nx, ny, metrics);
       syncStageItemTransform(snap.item, metrics);
     }
@@ -2037,6 +2513,12 @@ const StageGizmo = (function () {
 
   function onGizmoMouseDown(e) {
     if (App.editorMode !== 'stage' || e.button !== 0 || App.spaceDown || App.stage.previewFullscreen) return;
+    // Если клик попал прямо на направляющую — приоритет у перетаскивания направляющей
+    const nearGuide = findStageGuideNearClient(e.clientX, e.clientY, 6);
+    if (nearGuide) {
+      startExistingGuideDrag(nearGuide, e);
+      return;
+    }
     const target = e.target && e.target.closest ? e.target.closest('[data-gizmo]') : null;
     if (!target) return;
 
@@ -2297,10 +2779,31 @@ const StageGizmo = (function () {
     }
   }
 
+  function onViewportHoverMove(e) {
+    if (drag || _guideDrag || App.panning) return;
+    if (App.editorMode !== 'stage' || !App.stage.data || App.stage.previewFullscreen || !els.viewport) return;
+    const rect = els.viewport.getBoundingClientRect();
+    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+      if (App.stage.hoveredId) {
+        App.stage.hoveredId = null;
+        render();
+      }
+      return;
+    }
+    const w = clientToStageWorld(e.clientX, e.clientY, false);
+    const hit = findTopmostStageItemAtWorld(w.x, w.y);
+    const nextId = hit ? hit.id : null;
+    if (App.stage.hoveredId !== nextId) {
+      App.stage.hoveredId = nextId;
+      render();
+    }
+  }
+
   function init() {
     if (!els.stageGizmoSvg) return;
     els.stageGizmoSvg.addEventListener('mousedown', onGizmoMouseDown);
     window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mousemove', onViewportHoverMove);
     window.addEventListener('mouseup', onWindowMouseUp);
   }
 
@@ -2327,6 +2830,7 @@ function isStageFolderId(id) {
 
 function handleStageViewportMouseDown(e, fromGizmoInterior) {
   if (App.editorMode !== 'stage' || !App.stage.data || App.stage.previewFullscreen) return;
+  closeStageContextMenu();
   if (!fromGizmoInterior && e.target && e.target.closest) {
     if (e.target.closest('#stage-gizmo-svg') ||
         e.target.closest('#stage-guides-svg') ||
@@ -2334,6 +2838,11 @@ function handleStageViewportMouseDown(e, fromGizmoInterior) {
         e.target.closest('.stage-ruler-corner')) {
       return;
     }
+  }
+  const nearGuide = findStageGuideNearClient(e.clientX, e.clientY, 6);
+  if (nearGuide) {
+    startExistingGuideDrag(nearGuide, e);
+    return;
   }
 
   const metrics = getStageFrameMetrics();
@@ -2486,14 +2995,22 @@ function renderStageLayers() {
     setStageSelection(['__bg__'], '__bg__');
   });
 
+  bgLi.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setStageSelection(['__bg__'], '__bg__');
+    openStageLayerContextMenu(e.clientX, e.clientY, '__bg__');
+  });
+
   els.stageLayersList.appendChild(bgLi);
 
-  // 2) Иерархия папок и слоёв
+  // 2) Иерархия папок и слоёв (со сворачиванием папок и кнопкой «Выделить все объекты папки»)
   const { childrenOf, roots } = buildStageTreeIndex();
 
   function renderNode(it, depth) {
     const li = document.createElement('li');
     li.dataset.stageId = it.id;
+    const isCollapsed = it.isGroup && App.stage.collapsedFolders && App.stage.collapsedFolders.has(it.id);
     li.className = 'layer depth-' + Math.min(depth, 6) + (it.isGroup ? ' group' : '');
     if (App.stage.selectedIds.has(it.id)) li.classList.add('selected');
     if (it.visible === false) li.style.opacity = '0.5';
@@ -2501,12 +3018,13 @@ function renderStageLayers() {
 
     const visIcon = (it.visible === false) ? 'visibility_off' : 'visibility';
     const typeIcon = it.isGroup
-      ? 'folder'
+      ? (isCollapsed ? 'folder' : 'folder_open')
       : (it.type === 'object' ? 'smart_toy' : 'image');
 
     let badgeTxt;
+    const childList = it.isGroup ? (childrenOf[it.id] || []) : [];
     if (it.isGroup) {
-      badgeTxt = (childrenOf[it.id] || []).length + ' сл.';
+      badgeTxt = childList.length + ' сл.' + (it.editorOnly ? ' · позиц.' : '');
     } else if (it.interaction && it.interaction.role === 'interactive') {
       badgeTxt = 'interactive';
     } else if (it.interaction && it.interaction.role === 'scripted') {
@@ -2517,25 +3035,56 @@ function renderStageLayers() {
       badgeTxt = 'asset';
     }
 
+    const twistHtml = it.isGroup
+      ? '<button type="button" class="stage-folder-twist" title="' + (isCollapsed ? 'Развернуть папку' : 'Свернуть папку') + '">' +
+          '<span class="material-icons">' + (isCollapsed ? 'chevron_right' : 'expand_more') + '</span>' +
+        '</button>'
+      : '';
+
+    const selAllHtml = (it.isGroup && childList.length > 0)
+      ? '<button type="button" class="stage-folder-selall" title="Выделить все объекты папки для группового редактирования свойств">' +
+          '<span class="material-icons">select_all</span>' +
+        '</button>'
+      : '';
+
     li.innerHTML =
+      twistHtml +
       '<button type="button" class="stage-layer-vis" title="Показать / скрыть">' +
         '<span class="material-icons">' + visIcon + '</span>' +
       '</button>' +
       '<span class="material-icons layer-icon">' + typeIcon + '</span>' +
       '<span class="stage-layer-name"></span>' +
+      selAllHtml +
       '<span class="stage-layer-badge"></span>';
 
     li.querySelector('.stage-layer-name').textContent = it.label || it.id;
     li.querySelector('.stage-layer-badge').textContent = badgeTxt;
 
+    const twistBtn = li.querySelector('.stage-folder-twist');
+    if (twistBtn) {
+      twistBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleStageFolderCollapsed(it.id);
+      });
+    }
+
+    const selAllBtn = li.querySelector('.stage-folder-selall');
+    if (selAllBtn) {
+      selAllBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectAllInStageFolder(it.id);
+      });
+    }
+
     li.querySelector('.stage-layer-vis').addEventListener('click', (e) => {
       e.stopPropagation();
       it.visible = (it.visible === false);
       markStageDirty();
-      syncStageItemTransform(it);
+      if (it.isGroup) syncAllStageTransforms();
+      else syncStageItemTransform(it);
       if (App.stage.playing) evaluateStageAnimationsAtTime(App.stage.time);
       renderStageLayers();
-      if (App.stage.selectedId === it.id) renderStageProperties();
+      renderStageProperties();
       StageGizmo.render();
     });
 
@@ -2544,6 +3093,15 @@ function renderStageLayers() {
       if (e.ctrlKey || e.metaKey) toggleStageSelection(it.id);
       else if (e.shiftKey && App.stage.selectedId && App.stage.selectedId !== '__bg__') rangeSelectStage(it.id);
       else setStageSelection([it.id], it.id);
+    });
+
+    li.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!App.stage.selectedIds.has(it.id)) {
+        setStageSelection([it.id], it.id);
+      }
+      openStageLayerContextMenu(e.clientX, e.clientY, it.id);
     });
 
     li.addEventListener('dblclick', (e) => {
@@ -2607,8 +3165,8 @@ function renderStageLayers() {
     });
 
     els.stageLayersList.appendChild(li);
-    if (it.isGroup) {
-      for (const ch of (childrenOf[it.id] || [])) {
+    if (it.isGroup && !isCollapsed) {
+      for (const ch of childList) {
         renderNode(ch, depth + 1);
       }
     }
@@ -2682,11 +3240,451 @@ function startStageLayerInlineRename(li, item) {
   inp.addEventListener('click', (ev) => ev.stopPropagation());
 }
 
-function createStageFolder() {
+function toggleStageFolderCollapsed(folderId) {
+  if (!folderId) return;
+  if (!App.stage.collapsedFolders) App.stage.collapsedFolders = new Set();
+  if (App.stage.collapsedFolders.has(folderId)) App.stage.collapsedFolders.delete(folderId);
+  else App.stage.collapsedFolders.add(folderId);
+  renderStageLayers();
+}
+
+function getStageFolderLeafIds(folderId) {
+  if (!App.stage.data || !folderId) return [];
+  const { childrenOf } = buildStageTreeIndex();
+  const ids = [];
+  function walk(pid) {
+    for (const ch of (childrenOf[pid] || [])) {
+      if (ch.isGroup) walk(ch.id);
+      else ids.push(ch.id);
+    }
+  }
+  walk(folderId);
+  return ids;
+}
+
+function selectAllInStageFolder(folderId) {
+  const leafIds = getStageFolderLeafIds(folderId);
+  if (!leafIds.length) {
+    setHint('В папке пока нет объектов', 1600);
+    return;
+  }
+  if (App.stage.collapsedFolders) App.stage.collapsedFolders.delete(folderId);
+  setStageSelection(leafIds, leafIds[0]);
+  setHint('Выделены все объекты папки (' + leafIds.length + ') — редактируйте свойства совместно', 1900);
+}
+
+function triggerRenameStageItemById(itemId) {
+  if (!App.stage.data || !itemId || itemId === '__bg__') return;
+  const item = App.stage.data.items.find(x => x.id === itemId);
+  if (!item) return;
+  // Если родительская папка была свёрнута — развернём её, чтобы строка появилась в DOM
+  if (item.parent && App.stage.collapsedFolders && App.stage.collapsedFolders.has(item.parent)) {
+    App.stage.collapsedFolders.delete(item.parent);
+  }
+  renderStageLayers();
+  const li = els.stageLayersList
+    ? els.stageLayersList.querySelector('li[data-stage-id="' + itemId + '"]')
+    : null;
+  if (li) {
+    startStageLayerInlineRename(li, item);
+  }
+}
+
+function moveSelectedStageZOrder(dir) {
+  if (!App.stage.data) return;
+  const sel = Array.from(App.stage.selectedIds).filter(id => id !== '__bg__');
+  if (!sel.length) return;
+  const items = App.stage.data.items;
+  const selSet = new Set(sel);
+
+  if (dir === 'front') {
+    const rest = items.filter(it => !selSet.has(it.id));
+    const moved = items.filter(it => selSet.has(it.id));
+    App.stage.data.items = rest.concat(moved);
+  } else if (dir === 'back') {
+    const moved = items.filter(it => selSet.has(it.id));
+    const rest = items.filter(it => !selSet.has(it.id));
+    App.stage.data.items = moved.concat(rest);
+  } else if (dir === 'up') {
+    for (let i = items.length - 2; i >= 0; i--) {
+      if (selSet.has(items[i].id) && !selSet.has(items[i + 1].id) && items[i].parent === items[i + 1].parent) {
+        const tmp = items[i];
+        items[i] = items[i + 1];
+        items[i + 1] = tmp;
+      }
+    }
+  } else if (dir === 'down') {
+    for (let i = 1; i < items.length; i++) {
+      if (selSet.has(items[i].id) && !selSet.has(items[i - 1].id) && items[i].parent === items[i - 1].parent) {
+        const tmp = items[i];
+        items[i] = items[i - 1];
+        items[i - 1] = tmp;
+      }
+    }
+  }
+  markStageDirty();
+  syncStageDomOrder();
+  renderStageLayers();
+  StageGizmo.render();
+}
+
+function alignSelectedStageItems(mode, forceFrame) {
+  if (!App.stage.data) return;
+  const leaves = getSelectedTransformLeafItems();
+  if (!leaves.length) return;
+  const m = getStageFrameMetrics();
+  const useFrame = forceFrame || leaves.length === 1;
+
+  const boxes = leaves.map(it => ({
+    it,
+    wpos: anchorToWorld(it.anchor, m),
+    b: getStageItemWorldAABB(it, m)
+  }));
+
+  let refMinX = -m.fw / 2, refMaxX = m.fw / 2;
+  let refMinY = -m.fh / 2, refMaxY = m.fh / 2;
+  if (!useFrame) {
+    refMinX = Infinity; refMinY = Infinity; refMaxX = -Infinity; refMaxY = -Infinity;
+    for (const x of boxes) {
+      if (x.b.minX < refMinX) refMinX = x.b.minX;
+      if (x.b.minY < refMinY) refMinY = x.b.minY;
+      if (x.b.maxX > refMaxX) refMaxX = x.b.maxX;
+      if (x.b.maxY > refMaxY) refMaxY = x.b.maxY;
+    }
+  }
+  const refCx = (refMinX + refMaxX) / 2;
+  const refCy = (refMinY + refMaxY) / 2;
+
+  if (mode === 'dist-x' && boxes.length >= 3) {
+    const sorted = boxes.slice().sort((a, b) => ((a.b.minX + a.b.maxX) / 2) - ((b.b.minX + b.b.maxX) / 2));
+    const firstCx = (sorted[0].b.minX + sorted[0].b.maxX) / 2;
+    const lastCx  = (sorted[sorted.length - 1].b.minX + sorted[sorted.length - 1].b.maxX) / 2;
+    const step = (lastCx - firstCx) / (sorted.length - 1);
+    sorted.forEach((entry, idx) => {
+      const curCx = (entry.b.minX + entry.b.maxX) / 2;
+      const targetCx = firstCx + step * idx;
+      const nx = entry.wpos.x + (targetCx - curCx);
+      entry.it.anchor = worldToAnchor(nx, entry.wpos.y, m);
+      syncStageItemTransform(entry.it, m);
+    });
+  } else if (mode === 'dist-y' && boxes.length >= 3) {
+    const sorted = boxes.slice().sort((a, b) => ((a.b.minY + a.b.maxY) / 2) - ((b.b.minY + b.b.maxY) / 2));
+    const firstCy = (sorted[0].b.minY + sorted[0].b.maxY) / 2;
+    const lastCy  = (sorted[sorted.length - 1].b.minY + sorted[sorted.length - 1].b.maxY) / 2;
+    const step = (lastCy - firstCy) / (sorted.length - 1);
+    sorted.forEach((entry, idx) => {
+      const curCy = (entry.b.minY + entry.b.maxY) / 2;
+      const targetCy = firstCy + step * idx;
+      const ny = entry.wpos.y + (targetCy - curCy);
+      entry.it.anchor = worldToAnchor(entry.wpos.x, ny, m);
+      syncStageItemTransform(entry.it, m);
+    });
+  } else {
+    for (const entry of boxes) {
+      let dx = 0, dy = 0;
+      if (mode === 'left')        dx = refMinX - entry.b.minX;
+      else if (mode === 'center-x') dx = refCx - (entry.b.minX + entry.b.maxX) / 2;
+      else if (mode === 'right')  dx = refMaxX - entry.b.maxX;
+      else if (mode === 'top')    dy = refMinY - entry.b.minY;
+      else if (mode === 'center-y') dy = refCy - (entry.b.minY + entry.b.maxY) / 2;
+      else if (mode === 'bottom') dy = refMaxY - entry.b.maxY;
+      else if (mode === 'center-both') {
+        dx = refCx - (entry.b.minX + entry.b.maxX) / 2;
+        dy = refCy - (entry.b.minY + entry.b.maxY) / 2;
+      }
+      entry.it.anchor = worldToAnchor(entry.wpos.x + dx, entry.wpos.y + dy, m);
+      syncStageItemTransform(entry.it, m);
+    }
+  }
+
+  markStageDirty();
+  updateStageSelSize();
+  syncStageInspectorLive();
+  renderStageProperties();
+  StageGizmo.render();
+}
+
+// -------- Кастомное контекстное ПКМ-меню Редактора сцены --------
+
+function closeStageContextMenu() {
+  if (els.stageContextMenu) els.stageContextMenu.hidden = true;
+}
+
+function openStageContextMenu(clientX, clientY, headerText, entries) {
+  const menu = els.stageContextMenu;
+  if (!menu) return;
+  if (typeof closeGridSettingsPopover === 'function') closeGridSettingsPopover();
+  closeGuidesSettingsPopover();
+
+  menu.innerHTML = '';
+  if (headerText) {
+    const hd = document.createElement('div');
+    hd.className = 'ctx-menu-header';
+    hd.textContent = headerText;
+    menu.appendChild(hd);
+  }
+
+  for (const ent of entries) {
+    if (!ent) continue;
+    if (ent.sep) {
+      const sep = document.createElement('div');
+      sep.className = 'ctx-menu-sep';
+      menu.appendChild(sep);
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ctx-menu-item' + (ent.danger ? ' danger' : '');
+    if (ent.disabled) btn.disabled = true;
+    btn.innerHTML =
+      '<span class="material-icons">' + (ent.icon || 'chevron_right') + '</span>' +
+      '<span></span>';
+    btn.querySelectorAll('span')[1].textContent = ent.label;
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      closeStageContextMenu();
+      if (typeof ent.action === 'function') ent.action();
+    });
+    menu.appendChild(btn);
+  }
+
+  menu.hidden = false;
+  const w = 240, h = Math.min(380, entries.length * 30 + 36);
+  const left = clamp(clientX, 6, Math.max(6, (window.innerWidth || 1280) - w - 8));
+  const top  = clamp(clientY, 6, Math.max(6, (window.innerHeight || 720) - h - 8));
+  menu.style.left = left + 'px';
+  menu.style.top  = top + 'px';
+}
+
+function openStageLayerContextMenu(clientX, clientY, stageId) {
+  if (!App.stage.data) return;
+  if (stageId === '__bg__') {
+    const bg = App.stage.data.background;
+    openStageContextMenu(clientX, clientY, 'Слой: Бэкграунд', [
+      {
+        icon: App.stage.bgPropsExpanded ? 'expand_less' : 'expand_more',
+        label: App.stage.bgPropsExpanded ? 'Свернуть свойства Бэкграунда' : 'Развернуть свойства Бэкграунда',
+        action: () => { App.stage.bgPropsExpanded = !App.stage.bgPropsExpanded; renderStageProperties(); }
+      },
+      {
+        icon: bg.visible === false ? 'visibility' : 'visibility_off',
+        label: bg.visible === false ? 'Показать фон сцены' : 'Скрыть фон сцены',
+        action: () => { bg.visible = (bg.visible === false); markStageDirty(); renderStageBackground(); renderStageLayers(); renderStageProperties(); }
+      },
+      {
+        icon: 'upload_file',
+        label: 'Загрузить SVG / PNG фона…',
+        action: () => triggerStageFileUpload('bg')
+      },
+      { sep: true },
+      {
+        icon: 'fit_screen',
+        label: 'Вписать сцену во вьюпорт',
+        action: () => fitStageView()
+      }
+    ]);
+    return;
+  }
+
+  const item = App.stage.data.items.find(x => x.id === stageId);
+  if (!item) return;
+  const multiCount = Array.from(App.stage.selectedIds).filter(id => id !== '__bg__').length;
+
+  if (item.isGroup) {
+    const isCollapsed = App.stage.collapsedFolders && App.stage.collapsedFolders.has(item.id);
+    const leafCount = getStageFolderLeafIds(item.id).length;
+    openStageContextMenu(clientX, clientY, 'Папка: ' + (item.label || item.id), [
+      {
+        icon: 'select_all',
+        label: 'Выделить все объекты папки (' + leafCount + ')',
+        disabled: leafCount === 0,
+        action: () => selectAllInStageFolder(item.id)
+      },
+      {
+        icon: 'edit',
+        label: 'Переименовать папку',
+        action: () => triggerRenameStageItemById(item.id)
+      },
+      {
+        icon: isCollapsed ? 'unfold_more' : 'unfold_less',
+        label: isCollapsed ? 'Развернуть список папки' : 'Свернуть список папки',
+        action: () => toggleStageFolderCollapsed(item.id)
+      },
+      {
+        icon: item.visible === false ? 'visibility' : 'visibility_off',
+        label: item.visible === false ? 'Показать папку' : 'Скрыть папку',
+        action: () => { item.visible = (item.visible === false); markStageDirty(); syncAllStageTransforms(); renderStageLayers(); renderStageProperties(); StageGizmo.render(); }
+      },
+      { sep: true },
+      {
+        icon: 'add_circle_outline',
+        label: 'Добавить объект в папку…',
+        action: () => { setStageSelection([item.id], item.id); openStagePickModal(); }
+      },
+      {
+        icon: item.editorOnly ? 'check_box' : 'check_box_outline_blank',
+        label: 'Группа только для позиционирования',
+        action: () => { item.editorOnly = !item.editorOnly; markStageDirty(); renderStageLayers(); renderStageProperties(); }
+      },
+      {
+        icon: 'folder_off',
+        label: 'Разгруппировать (сохранив позиции)',
+        action: () => { setStageSelection([item.id], item.id); ungroupSelectedStageFolder(); }
+      },
+      { sep: true },
+      {
+        icon: 'vertical_align_top',
+        label: 'На передний план',
+        action: () => moveSelectedStageZOrder('front')
+      },
+      {
+        icon: 'vertical_align_bottom',
+        label: 'На задний план',
+        action: () => moveSelectedStageZOrder('back')
+      },
+      { sep: true },
+      {
+        icon: 'delete_outline',
+        label: 'Удалить папку со слоями',
+        danger: true,
+        action: () => deleteSelectedStageItems()
+      }
+    ]);
+    return;
+  }
+
+  const entries = [
+    {
+      icon: 'edit',
+      label: 'Переименовать слой',
+      action: () => triggerRenameStageItemById(item.id)
+    },
+    {
+      icon: item.visible === false ? 'visibility' : 'visibility_off',
+      label: item.visible === false ? 'Показать слой' : 'Скрыть слой',
+      action: () => { item.visible = (item.visible === false); markStageDirty(); syncStageItemTransform(item); renderStageLayers(); renderStageProperties(); StageGizmo.render(); }
+    },
+    {
+      icon: 'content_copy',
+      label: multiCount > 1 ? ('Дублировать выделенные (' + multiCount + ')') : 'Дублировать слой',
+      action: () => duplicateSelectedStageItems()
+    },
+    {
+      icon: 'filter_center_focus',
+      label: 'В центр сцены (50%, 50%)',
+      action: () => alignSelectedStageItems('center-both', true)
+    },
+    { sep: true },
+    {
+      icon: 'create_new_folder',
+      label: multiCount > 1 ? ('Сгруппировать для позиционирования (' + multiCount + ')') : 'Упаковать в папку',
+      action: () => createStageFolder(multiCount > 1)
+    }
+  ];
+
+  if (item.parent) {
+    entries.push({
+      icon: 'folder_off',
+      label: 'Вынуть из папки / разгруппировать папку',
+      action: () => ungroupSelectedStageFolder()
+    });
+  }
+
+  entries.push(
+    { sep: true },
+    { icon: 'vertical_align_top',    label: 'На передний план', action: () => moveSelectedStageZOrder('front') },
+    { icon: 'arrow_upward',          label: 'Поднять выше',     action: () => moveSelectedStageZOrder('up') },
+    { icon: 'arrow_downward',        label: 'Опустить ниже',    action: () => moveSelectedStageZOrder('down') },
+    { icon: 'vertical_align_bottom', label: 'На задний план',   action: () => moveSelectedStageZOrder('back') }
+  );
+
+  if (item.type === 'object' && item.objectName) {
+    entries.push(
+      { sep: true },
+      {
+        icon: 'animation',
+        label: 'Открыть «' + item.objectName + '» в Редакторе объектов',
+        action: () => { setEditorMode('object'); requestOpenObject(item.objectName); }
+      }
+    );
+  }
+
+  entries.push(
+    { sep: true },
+    {
+      icon: 'delete_outline',
+      label: multiCount > 1 ? ('Удалить выделенные (' + multiCount + ')') : 'Удалить слой',
+      danger: true,
+      action: () => deleteSelectedStageItems()
+    }
+  );
+
+  openStageContextMenu(clientX, clientY, (item.type === 'object' ? 'Объект: ' : 'Слой: ') + (item.label || item.id), entries);
+}
+
+function openStageRulerOrGuideContextMenu(clientX, clientY, guide, defaultAxis) {
+  if (!App.stage.data) return;
+  const st = App.stage.data;
+  const entries = [];
+  if (guide) {
+    entries.push(
+      {
+        icon: 'delete_outline',
+        label: 'Удалить эту направляющую',
+        danger: true,
+        action: () => deleteStageGuideById(guide.id)
+      },
+      {
+        icon: 'vertical_align_center',
+        label: 'Поставить ровно по центру (50%)',
+        action: () => { guide.pos = 0.5; markStageDirty(); renderStageGuidesOverlay(); }
+      },
+      { sep: true }
+    );
+  } else if (defaultAxis) {
+    entries.push({
+      icon: 'add',
+      label: defaultAxis === 'h' ? '+ Горизонтальная по центру (50%)' : '+ Вертикальная по центру (50%)',
+      action: () => {
+        st.guides.push({ id: nextStageGuideId(), axis: defaultAxis, pos: 0.5 });
+        markStageDirty();
+        renderStageGuidesOverlay();
+      }
+    });
+  }
+  entries.push(
+    {
+      icon: 'grid_goldenratio',
+      label: '+ Крест направляющих по центру (50%)',
+      action: () => {
+        st.guides.push({ id: nextStageGuideId(), axis: 'v', pos: 0.5 });
+        st.guides.push({ id: nextStageGuideId(), axis: 'h', pos: 0.5 });
+        markStageDirty();
+        renderStageGuidesOverlay();
+      }
+    },
+    {
+      icon: 'tune',
+      label: 'Меню направляющих (цвет, прозрачность)…',
+      action: () => toggleGuidesSettingsPopover(els.btnStageGuidesMenu)
+    },
+    { sep: true },
+    {
+      icon: 'clear_all',
+      label: 'Очистить все направляющие (' + st.guides.length + ')',
+      danger: true,
+      disabled: st.guides.length === 0,
+      action: () => clearAllStageGuides()
+    }
+  );
+  openStageContextMenu(clientX, clientY, guide ? 'Направляющая' : 'Линейка сцены', entries);
+}
+
+function createStageFolder(asPositioningGroup) {
   if (!App.stage.data) return;
   const id = nextStageItemId('folder');
   const existingLabels = App.stage.data.items.filter(x => x.isGroup).map(x => x.label);
-  const label = resolveAutoName(existingLabels, 'Папка ');
+  const label = resolveAutoName(existingLabels, asPositioningGroup ? 'Группа ' : 'Папка ');
   let parent = null;
   const sel = Array.from(App.stage.selectedIds).filter(x => x !== '__bg__');
 
@@ -2697,6 +3695,7 @@ function createStageFolder() {
     id,
     label,
     isGroup: true,
+    editorOnly: !!asPositioningGroup,
     parent,
     visible: true,
     opacity: 1
@@ -3113,13 +4112,62 @@ function stagePropRowHtml(label, key, value, step, digits) {
   );
 }
 
+function getGroupBoundsAndCenter(leaves, metrics) {
+  const m = metrics || getStageFrameMetrics();
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const it of leaves) {
+    const b = getStageItemWorldAABB(it, m);
+    if (b.minX < minX) minX = b.minX;
+    if (b.minY < minY) minY = b.minY;
+    if (b.maxX > maxX) maxX = b.maxX;
+    if (b.maxY > maxY) maxY = b.maxY;
+  }
+  if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0, cx: 0, cy: 0, anchor: { x: 0.5, y: 0.5 } };
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  return { minX, minY, maxX, maxY, cx, cy, anchor: worldToAnchor(cx, cy, m) };
+}
+
+function stageAlignButtonsHtml(includeDistribute) {
+  return (
+    '<div class="stage-align-grid">' +
+      '<button type="button" class="stage-align-btn" data-salign="left" title="Выровнять по левому краю"><span class="material-icons">align_horizontal_left</span></button>' +
+      '<button type="button" class="stage-align-btn" data-salign="center-x" title="Выровнять по центру X"><span class="material-icons">align_horizontal_center</span></button>' +
+      '<button type="button" class="stage-align-btn" data-salign="right" title="Выровнять по правому краю"><span class="material-icons">align_horizontal_right</span></button>' +
+      '<button type="button" class="stage-align-btn" data-salign="top" title="Выровнять по верхнему краю"><span class="material-icons">align_vertical_top</span></button>' +
+      '<button type="button" class="stage-align-btn" data-salign="center-y" title="Выровнять по центру Y"><span class="material-icons">align_vertical_center</span></button>' +
+      '<button type="button" class="stage-align-btn" data-salign="bottom" title="Выровнять по нижнему краю"><span class="material-icons">align_vertical_bottom</span></button>' +
+    '</div>' +
+    (includeDistribute
+      ? '<div class="stage-btn-row">' +
+          '<button type="button" class="stage-btn-sm" data-salign="dist-x" title="Равномерно распределить по горизонтали (от 3 объектов)">Распред. X</button>' +
+          '<button type="button" class="stage-btn-sm" data-salign="dist-y" title="Равномерно распределить по вертикали (от 3 объектов)">Распред. Y</button>' +
+        '</div>'
+      : '')
+  );
+}
+
 function syncStageInspectorLive() {
   const props = els.props;
   if (!props || App.editorMode !== 'stage') return;
   const leaves = getSelectedTransformLeafItems();
+  const m = getStageFrameMetrics();
+  if (leaves.length > 1 || (App.stage.selectedId && isStageFolderId(App.stage.selectedId) && leaves.length >= 1)) {
+    const gc = getGroupBoundsAndCenter(leaves, m);
+    const gMap = {
+      'grp.ancX': (gc.anchor.x * 100).toFixed(2),
+      'grp.ancY': (gc.anchor.y * 100).toFixed(2),
+      'grp.pxX':  gc.cx.toFixed(1),
+      'grp.pxY':  gc.cy.toFixed(1),
+    };
+    for (const k of Object.keys(gMap)) {
+      const inp = props.querySelector('input[data-skey="' + k + '"]');
+      if (inp && document.activeElement !== inp) inp.value = gMap[k];
+    }
+    return;
+  }
   if (leaves.length !== 1) return;
   const it = leaves[0];
-  const m = getStageFrameMetrics();
   const wpos = anchorToWorld(it.anchor, m);
   const map = {
     'anc.x': (it.anchor.x * 100).toFixed(2),
@@ -3217,11 +4265,15 @@ function renderStageProperties() {
         '</div>' +
       '</div>' +
 
-      // Быстрое управление направляющими
+      // Быстрое управление направляющими и сеткой макета
       '<div class="pgroup">' +
-        '<div class="pgroup-title">Направляющие (' + guides.length + ')</div>' +
+        '<div class="pgroup-title">Направляющие (' + guides.length + ') и сетка макета</div>' +
         '<div class="stage-btn-row">' +
-          '<button type="button" id="sprop-guide-center" class="stage-btn-sm">+ Крест по центру (50%)</button>' +
+          '<button type="button" id="sprop-guide-menu" class="stage-btn-sm primary-green">Меню направляющих…</button>' +
+          '<button type="button" id="sprop-grid-menu" class="stage-btn-sm">Настройка сетки…</button>' +
+        '</div>' +
+        '<div class="stage-btn-row">' +
+          '<button type="button" id="sprop-guide-center" class="stage-btn-sm">+ Крест 50%</button>' +
           (guides.length ? '<button type="button" id="sprop-guide-clear" class="stage-btn-sm">Очистить</button>' : '') +
         '</div>' +
       '</div>';
@@ -3229,6 +4281,18 @@ function renderStageProperties() {
     props.querySelector('#sprop-bg-collapse-btn').addEventListener('click', () => {
       App.stage.bgPropsExpanded = !App.stage.bgPropsExpanded;
       renderStageProperties();
+    });
+
+    props.querySelector('#sprop-guide-menu').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleGuidesSettingsPopover(els.btnStageGuidesMenu || e.currentTarget);
+    });
+
+    props.querySelector('#sprop-grid-menu').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof toggleGridSettingsPopover === 'function') {
+        toggleGridSettingsPopover(els.btnGridSettings || e.currentTarget);
+      }
     });
 
     props.querySelector('#sprop-scene-kind').addEventListener('change', (e) => {
@@ -3346,34 +4410,105 @@ function renderStageProperties() {
     return;
   }
 
-  // 2) Групповое выделение (папка ИЛИ несколько слоёв)
+  // 2) Групповое выделение (папка ИЛИ несколько слоёв) — совместное редактирование свойств и позиционирование
   if (leaves.length > 1 || isStageFolderId(selId)) {
     const folder = isStageFolderId(selId)
       ? App.stage.data.items.find(x => x.id === selId)
       : null;
+    const m = getStageFrameMetrics();
+    const gc = getGroupBoundsAndCenter(leaves, m);
+    const avgOpacity = leaves.length
+      ? (leaves.reduce((acc, x) => acc + (x.opacity ?? 1), 0) / leaves.length)
+      : 1;
+    const alignToFrame = !!App.stage._groupAlignFrame;
+
     els.propsTitle.textContent = folder
       ? ('Папка: ' + folder.label + ' (' + leaves.length + ')')
-      : ('Группа слоёв (' + leaves.length + ')');
+      : ('Выделено слоёв: ' + leaves.length);
 
     props.innerHTML =
       (folder
-        ? '<label class="pcheck">' +
-            '<input type="checkbox" id="sprop-folder-vis"' + (folder.visible !== false ? ' checked' : '') + '>' +
-            '<span>Видимость папки</span>' +
-          '</label>'
-        : '') +
+        ? '<div class="pgroup">' +
+            '<label class="pcheck">' +
+              '<input type="checkbox" id="sprop-folder-vis"' + (folder.visible !== false ? ' checked' : '') + '>' +
+              '<span>Видимость папки</span>' +
+            '</label>' +
+            '<label class="pcheck" title="Папка используется как удобная группа для совместного позиционирования в редакторе — можно разгруппировать в любой момент без потери позиций">' +
+              '<input type="checkbox" id="sprop-folder-editor-only"' + (folder.editorOnly ? ' checked' : '') + '>' +
+              '<span>Группа только для позиционирования</span>' +
+            '</label>' +
+            '<div class="stage-btn-row">' +
+              '<button type="button" id="sprop-folder-selall" class="stage-btn-sm primary-green"' + (leaves.length ? '' : ' disabled') + '>Выделить все объекты (' + leaves.length + ')</button>' +
+              '<button type="button" id="sprop-folder-ungroup" class="stage-btn-sm">Разгруппировать</button>' +
+            '</div>' +
+            '<div class="stage-btn-row">' +
+              '<button type="button" id="sprop-grp-add-here" class="stage-btn-sm">+ Добавить слой в папку…</button>' +
+            '</div>' +
+          '</div>'
+        : '<div class="pgroup">' +
+            '<div class="pgroup-title">Группировка для позиционирования</div>' +
+            '<div class="stage-btn-row">' +
+              '<button type="button" id="sprop-pack-temp-grp" class="stage-btn-sm primary-green">Во врем. группу позиц.</button>' +
+              '<button type="button" id="sprop-pack-folder" class="stage-btn-sm">В папку</button>' +
+            '</div>' +
+          '</div>') +
+
       '<div class="pgroup">' +
-        '<div class="pgroup-title">Масштаб выделенной группы</div>' +
+        '<div class="pgroup-title">Позиция центра группы и выравнивание</div>' +
+        stagePropRowHtml('X%', 'grp.ancX', gc.anchor.x * 100, 0.5, 2) +
+        stagePropRowHtml('Y%', 'grp.ancY', gc.anchor.y * 100, 0.5, 2) +
+        stagePropRowHtml('X', 'grp.pxX', gc.cx, 2, 1) +
+        stagePropRowHtml('Y', 'grp.pxY', gc.cy, 2, 1) +
+        '<label class="pcheck" style="margin-top:4px">' +
+          '<input type="checkbox" id="sprop-align-ref"' + (alignToFrame ? ' checked' : '') + '>' +
+          '<span>Выравнивать относительно фрэйма 1366×768</span>' +
+        '</label>' +
+        stageAlignButtonsHtml(leaves.length >= 3) +
+        '<div class="stage-btn-row">' +
+          '<button type="button" id="sprop-grp-center" class="stage-btn-sm primary-green">Группу в центр сцены (50%, 50%)</button>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="pgroup">' +
+        '<div class="pgroup-title">Масштаб, поворот и прозрачность группы</div>' +
         stagePropRowHtml('K%', 'grp.pct', 100, 5, 1) +
         '<div class="stage-btn-row">' +
           '<button type="button" class="stage-btn-sm" data-gscale="0.5">×0.5</button>' +
           '<button type="button" class="stage-btn-sm" data-gscale="0.8">×0.8</button>' +
           '<button type="button" class="stage-btn-sm" data-gscale="1.25">×1.25</button>' +
           '<button type="button" class="stage-btn-sm" data-gscale="1.5">×1.5</button>' +
+          '<button type="button" id="sprop-grp-flipx" class="stage-btn-sm" title="Зеркально отразить группу по X">Flip X</button>' +
         '</div>' +
         '<div class="stage-btn-row">' +
-          '<button type="button" id="sprop-grp-center" class="stage-btn-sm primary-green">Группу в центр сцены</button>' +
-          '<button type="button" id="sprop-grp-add-here" class="stage-btn-sm"' + (folder ? '' : ' hidden') + '>+ Слой в папку</button>' +
+          '<button type="button" class="stage-btn-sm" data-grot="-15">↺ -15°</button>' +
+          '<button type="button" class="stage-btn-sm" data-grot="15">↻ +15°</button>' +
+          '<button type="button" class="stage-btn-sm" data-grot="reset">Сброс R=0°</button>' +
+        '</div>' +
+        stagePropRowHtml('Op', 'grp.op', avgOpacity, 0.05, 2) +
+      '</div>' +
+
+      '<div class="pgroup">' +
+        '<div class="pgroup-title">Пакетные свойства выбранных объектов</div>' +
+        '<select id="sprop-batch-scalemode" class="stage-prop-select">' +
+          '<option value="">— Задать адаптивность всем (' + leaves.length + ') —</option>' +
+          '<option value="fit">Пропорционально экрану (fit)</option>' +
+          '<option value="stretch">Растягивать с экраном (stretch)</option>' +
+          '<option value="width">По ширине экрана (width)</option>' +
+          '<option value="height">По высоте экрана (height)</option>' +
+          '<option value="fixed">Фиксированный px (fixed)</option>' +
+        '</select>' +
+        '<select id="sprop-batch-role" class="stage-prop-select">' +
+          '<option value="">— Задать роль в игре всем (' + leaves.length + ') —</option>' +
+          '<option value="static">Статичный декор</option>' +
+          '<option value="animated">Фоновая анимация</option>' +
+          '<option value="interactive">Интерактивный объект</option>' +
+          '<option value="scripted">Управляется игрой / катсценой</option>' +
+        '</select>' +
+        '<div class="stage-btn-row">' +
+          '<button type="button" class="stage-btn-sm" data-gz="front" title="На передний план">На передний</button>' +
+          '<button type="button" class="stage-btn-sm" data-gz="back" title="На задний план">На задний</button>' +
+          '<button type="button" id="sprop-grp-vis-on" class="stage-btn-sm">Показать все</button>' +
+          '<button type="button" id="sprop-grp-vis-off" class="stage-btn-sm">Скрыть все</button>' +
         '</div>' +
       '</div>';
 
@@ -3381,38 +4516,68 @@ function renderStageProperties() {
       props.querySelector('#sprop-folder-vis').addEventListener('change', (e) => {
         folder.visible = e.target.checked;
         markStageDirty();
-        syncStageItemTransform(folder);
+        syncAllStageTransforms();
         renderStageLayers();
         StageGizmo.render();
       });
-      const addInBtn = props.querySelector('#sprop-grp-add-here');
-      if (addInBtn) addInBtn.addEventListener('click', openStagePickModal);
+      props.querySelector('#sprop-folder-editor-only').addEventListener('change', (e) => {
+        folder.editorOnly = e.target.checked;
+        markStageDirty();
+        renderStageLayers();
+      });
+      props.querySelector('#sprop-folder-selall').addEventListener('click', () => selectAllInStageFolder(folder.id));
+      props.querySelector('#sprop-folder-ungroup').addEventListener('click', ungroupSelectedStageFolder);
+      props.querySelector('#sprop-grp-add-here').addEventListener('click', openStagePickModal);
+    } else {
+      props.querySelector('#sprop-pack-temp-grp').addEventListener('click', () => createStageFolder(true));
+      props.querySelector('#sprop-pack-folder').addEventListener('click', () => createStageFolder(false));
+    }
+
+    const alignRefChk = props.querySelector('#sprop-align-ref');
+    if (alignRefChk) {
+      alignRefChk.addEventListener('change', () => {
+        App.stage._groupAlignFrame = alignRefChk.checked;
+      });
+    }
+
+    props.querySelectorAll('[data-salign]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        alignSelectedStageItems(btn.getAttribute('data-salign'), !!App.stage._groupAlignFrame);
+      });
+    });
+
+    function moveGroupCenterToWorld(targetCx, targetCy) {
+      if (!leaves.length) return;
+      const curM = getStageFrameMetrics();
+      const curG = getGroupBoundsAndCenter(leaves, curM);
+      const dx = targetCx - curG.cx;
+      const dy = targetCy - curG.cy;
+      for (const it of leaves) {
+        const wp = anchorToWorld(it.anchor, curM);
+        it.anchor = worldToAnchor(wp.x + dx, wp.y + dy, curM);
+        syncStageItemTransform(it, curM);
+      }
+      markStageDirty();
+      syncStageInspectorLive();
+      StageGizmo.render();
     }
 
     function scaleGroupByFactor(factor) {
       if (!leaves.length || !isFinite(factor) || factor <= 0) return;
-      const m = getStageFrameMetrics();
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const curM = getStageFrameMetrics();
+      const curG = getGroupBoundsAndCenter(leaves, curM);
       for (const it of leaves) {
-        const b = getStageItemWorldAABB(it, m);
-        if (b.minX < minX) minX = b.minX;
-        if (b.minY < minY) minY = b.minY;
-        if (b.maxX > maxX) maxX = b.maxX;
-        if (b.maxY > maxY) maxY = b.maxY;
-      }
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-      for (const it of leaves) {
-        const wp = anchorToWorld(it.anchor, m);
-        const nx = cx + (wp.x - cx) * factor;
-        const ny = cy + (wp.y - cy) * factor;
-        it.anchor = worldToAnchor(nx, ny, m);
+        const wp = anchorToWorld(it.anchor, curM);
+        const nx = curG.cx + (wp.x - curG.cx) * factor;
+        const ny = curG.cy + (wp.y - curG.cy) * factor;
+        it.anchor = worldToAnchor(nx, ny, curM);
         it.scale.x = roundScaleVal(it.scale.x * factor);
         it.scale.y = roundScaleVal(it.scale.y * factor);
-        syncStageItemTransform(it, m);
+        syncStageItemTransform(it, curM);
       }
       markStageDirty();
       updateStageSelSize();
+      syncStageInspectorLive();
       StageGizmo.render();
     }
 
@@ -3420,38 +4585,143 @@ function renderStageProperties() {
       btn.addEventListener('click', () => scaleGroupByFactor(parseFloat(btn.dataset.gscale)));
     });
 
-    props.querySelector('#sprop-grp-center').addEventListener('click', () => {
+    props.querySelector('#sprop-grp-flipx').addEventListener('click', () => {
       if (!leaves.length) return;
-      const m = getStageFrameMetrics();
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const curM = getStageFrameMetrics();
+      const curG = getGroupBoundsAndCenter(leaves, curM);
       for (const it of leaves) {
-        const b = getStageItemWorldAABB(it, m);
-        if (b.minX < minX) minX = b.minX;
-        if (b.minY < minY) minY = b.minY;
-        if (b.maxX > maxX) maxX = b.maxX;
-        if (b.maxY > maxY) maxY = b.maxY;
-      }
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-      for (const it of leaves) {
-        const wp = anchorToWorld(it.anchor, m);
-        it.anchor = worldToAnchor(wp.x - cx, wp.y - cy, m);
-        syncStageItemTransform(it, m);
+        const wp = anchorToWorld(it.anchor, curM);
+        const nx = curG.cx - (wp.x - curG.cx);
+        it.anchor = worldToAnchor(nx, wp.y, curM);
+        it.scale.x = -it.scale.x;
+        it.rotation = -(it.rotation || 0);
+        syncStageItemTransform(it, curM);
       }
       markStageDirty();
+      syncStageInspectorLive();
       StageGizmo.render();
+    });
+
+    props.querySelectorAll('button[data-grot]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!leaves.length) return;
+        const curM = getStageFrameMetrics();
+        const raw = btn.getAttribute('data-grot');
+        if (raw === 'reset') {
+          for (const it of leaves) {
+            it.rotation = 0;
+            syncStageItemTransform(it, curM);
+          }
+        } else {
+          const deg = parseFloat(raw) || 0;
+          const rad = deg * Math.PI / 180;
+          const c = Math.cos(rad), s = Math.sin(rad);
+          const curG = getGroupBoundsAndCenter(leaves, curM);
+          for (const it of leaves) {
+            const wp = anchorToWorld(it.anchor, curM);
+            const dx = wp.x - curG.cx, dy = wp.y - curG.cy;
+            it.anchor = worldToAnchor(curG.cx + dx * c - dy * s, curG.cy + dx * s + dy * c, curM);
+            it.rotation = Math.round(((it.rotation || 0) + deg) * 100) / 100;
+            syncStageItemTransform(it, curM);
+          }
+        }
+        markStageDirty();
+        updateStageSelSize();
+        syncStageInspectorLive();
+        StageGizmo.render();
+      });
+    });
+
+    props.querySelector('#sprop-grp-center').addEventListener('click', () => {
+      moveGroupCenterToWorld(0, 0);
+    });
+
+    props.querySelector('#sprop-batch-scalemode').addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (!val) return;
+      for (const it of leaves) {
+        it.scaleMode = val;
+        syncStageItemTransform(it);
+      }
+      markStageDirty();
+      updateStageSelSize();
+      StageGizmo.render();
+      e.target.value = '';
+    });
+
+    props.querySelector('#sprop-batch-role').addEventListener('change', (e) => {
+      const val = e.target.value;
+      if (!val) return;
+      for (const it of leaves) {
+        it.interaction = normalizeStageInteraction(it.interaction, it.type);
+        it.interaction.role = val;
+        if (val === 'interactive' && !it.interaction.clickable && !it.interaction.draggable) {
+          it.interaction.clickable = true;
+        }
+      }
+      markStageDirty();
+      renderStageLayers();
+      e.target.value = '';
+    });
+
+    props.querySelectorAll('[data-gz]').forEach(btn => {
+      btn.addEventListener('click', () => moveSelectedStageZOrder(btn.getAttribute('data-gz')));
+    });
+
+    props.querySelector('#sprop-grp-vis-on').addEventListener('click', () => {
+      for (const it of leaves) { it.visible = true; syncStageItemTransform(it); }
+      markStageDirty(); renderStageLayers(); StageGizmo.render();
+    });
+    props.querySelector('#sprop-grp-vis-off').addEventListener('click', () => {
+      for (const it of leaves) { it.visible = false; syncStageItemTransform(it); }
+      markStageDirty(); renderStageLayers(); StageGizmo.render();
     });
 
     let lastPct = 100;
     bindStageNumericInputs(props, {
-      get() { return lastPct; },
-      set(k, v) {
-        const nextPct = clamp(v, 10, 500);
-        const ratio = nextPct / lastPct;
-        lastPct = nextPct;
-        scaleGroupByFactor(ratio);
+      get(k) {
+        const curM = getStageFrameMetrics();
+        const curG = getGroupBoundsAndCenter(leaves, curM);
+        if (k === 'grp.ancX') return curG.anchor.x * 100;
+        if (k === 'grp.ancY') return curG.anchor.y * 100;
+        if (k === 'grp.pxX')  return curG.cx;
+        if (k === 'grp.pxY')  return curG.cy;
+        if (k === 'grp.op')   return leaves.length ? (leaves[0].opacity ?? 1) : 1;
+        return lastPct;
       },
-      reset: { 'grp.pct': 100 }
+      set(k, v) {
+        const curM = getStageFrameMetrics();
+        const curG = getGroupBoundsAndCenter(leaves, curM);
+        if (k === 'grp.ancX') {
+          const w = anchorToWorld({ x: v / 100, y: curG.anchor.y }, curM);
+          moveGroupCenterToWorld(w.x, curG.cy);
+          return;
+        }
+        if (k === 'grp.ancY') {
+          const w = anchorToWorld({ x: curG.anchor.x, y: v / 100 }, curM);
+          moveGroupCenterToWorld(curG.cx, w.y);
+          return;
+        }
+        if (k === 'grp.pxX') { moveGroupCenterToWorld(v, curG.cy); return; }
+        if (k === 'grp.pxY') { moveGroupCenterToWorld(curG.cx, v); return; }
+        if (k === 'grp.op') {
+          const op = clamp(v, 0, 1);
+          for (const it of leaves) { it.opacity = op; syncStageItemTransform(it, curM); }
+          markStageDirty();
+          return;
+        }
+        if (k === 'grp.pct') {
+          const nextPct = clamp(v, 10, 500);
+          const ratio = nextPct / lastPct;
+          lastPct = nextPct;
+          scaleGroupByFactor(ratio);
+        }
+      },
+      reset: {
+        'grp.ancX': 50, 'grp.ancY': 50,
+        'grp.pxX': 0,   'grp.pxY': 0,
+        'grp.pct': 100, 'grp.op': 1
+      }
     });
     return;
   }
@@ -3538,8 +4808,16 @@ function renderStageProperties() {
       '<div class="pgroup-title" style="margin-top:5px">Мировые координаты пивота, px</div>' +
       stagePropRowHtml('X', 'px.x', wpos.x, 2, 1) +
       stagePropRowHtml('Y', 'px.y', wpos.y, 2, 1) +
+      '<div class="pgroup-title" style="margin-top:5px">Выравнивание по фрэйму 1366×768</div>' +
+      stageAlignButtonsHtml(false) +
       '<div class="stage-btn-row">' +
-        '<button type="button" id="sprop-item-center" class="stage-btn-sm primary-green">В центр (50%, 50%)</button>' +
+        '<button type="button" id="sprop-item-center" class="stage-btn-sm primary-green">Пивот в (50%, 50%)</button>' +
+      '</div>' +
+      '<div class="stage-btn-row">' +
+        '<button type="button" class="stage-btn-sm" data-sz="front" title="На передний план">На передний</button>' +
+        '<button type="button" class="stage-btn-sm" data-sz="up" title="Поднять выше">Выше</button>' +
+        '<button type="button" class="stage-btn-sm" data-sz="down" title="Опустить ниже">Ниже</button>' +
+        '<button type="button" class="stage-btn-sm" data-sz="back" title="На задний план">На задний</button>' +
       '</div>' +
     '</div>' +
     '<div class="pgroup">' +
@@ -3646,6 +4924,14 @@ function renderStageProperties() {
     syncStageItemTransform(it);
     syncStageInspectorLive();
     StageGizmo.render();
+  });
+
+  props.querySelectorAll('[data-salign]').forEach(btn => {
+    btn.addEventListener('click', () => alignSelectedStageItems(btn.getAttribute('data-salign'), true));
+  });
+
+  props.querySelectorAll('[data-sz]').forEach(btn => {
+    btn.addEventListener('click', () => moveSelectedStageZOrder(btn.getAttribute('data-sz')));
   });
 
   props.querySelector('#sprop-scale-mode').addEventListener('change', (e) => {
@@ -4129,6 +5415,8 @@ async function setEditorMode(nextMode) {
     await openInitialStageIfNeeded();
     renderStageRulersAndGuides();
   } else {
+    closeStageContextMenu();
+    closeGuidesSettingsPopover();
     renderStageRulersAndGuides();
     App.camera = clone(App.objectCamera);
     applyBackgroundToViewport();
@@ -4222,6 +5510,13 @@ function setupStageEditor() {
     });
   }
 
+  if (els.btnStageGuidesMenu) {
+    els.btnStageGuidesMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleGuidesSettingsPopover(els.btnStageGuidesMenu);
+    });
+  }
+
   if (els.btnStageAddObj) {
     els.btnStageAddObj.addEventListener('click', openStagePickModal);
   }
@@ -4245,7 +5540,7 @@ function setupStageEditor() {
 
   // Слои сцены и модалка добавления
   if (els.btnStageAddLayer)   els.btnStageAddLayer.addEventListener('click', openStagePickModal);
-  if (els.btnStageAddFolder)  els.btnStageAddFolder.addEventListener('click', createStageFolder);
+  if (els.btnStageAddFolder)  els.btnStageAddFolder.addEventListener('click', () => createStageFolder(false));
   if (els.btnStageUngroup)    els.btnStageUngroup.addEventListener('click', ungroupSelectedStageFolder);
   if (els.btnStageCloneLayer) els.btnStageCloneLayer.addEventListener('click', duplicateSelectedStageItems);
   if (els.btnStageDelLayer)   els.btnStageDelLayer.addEventListener('click', deleteSelectedStageItems);
@@ -4288,11 +5583,46 @@ function setupStageEditor() {
     });
   }
 
-  // Полноэкранный чистый Предпросмотр по кнопке #stage-play-btn (выход — ESC)
+  // Полноэкранный чистый Предпросмотр по кнопке #stage-play-btn (выход — ESC) + флаг FPS справа от кнопки
+  const savedFpsPref = getPref(PREF_STAGE_PREVIEW_FPS);
+  if (savedFpsPref === '0' || savedFpsPref === 'false') App.stage.showPreviewFps = false;
+  else if (savedFpsPref === '1' || savedFpsPref === 'true') App.stage.showPreviewFps = true;
+  if (els.stagePreviewFpsFlag) {
+    els.stagePreviewFpsFlag.checked = !!App.stage.showPreviewFps;
+    els.stagePreviewFpsFlag.addEventListener('change', () => {
+      App.stage.showPreviewFps = !!els.stagePreviewFpsFlag.checked;
+      setPref(PREF_STAGE_PREVIEW_FPS, App.stage.showPreviewFps ? '1' : '0');
+      syncStagePreviewFpsHudVisibility();
+    });
+  }
+
   if (els.stagePlay) {
     els.stagePlay.addEventListener('click', () => {
       if (App.stage.previewFullscreen) exitStageFullscreenPreview();
       else enterStageFullscreenPreview();
+    });
+  }
+
+  // Кастомное ПКМ-меню на вьюпорте сцены (по направляющим и объектам сцены; без панорамирования ПКМ)
+  if (els.viewport) {
+    els.viewport.addEventListener('contextmenu', (e) => {
+      if (App.editorMode !== 'stage' || !App.stage.data || App.stage.previewFullscreen) return;
+      e.preventDefault();
+      const nearGuide = findStageGuideNearClient(e.clientX, e.clientY, 7);
+      if (nearGuide) {
+        openStageRulerOrGuideContextMenu(e.clientX, e.clientY, nearGuide, nearGuide.axis);
+        return;
+      }
+      const wClick = clientToStageWorld(e.clientX, e.clientY, false);
+      const hitTop = findTopmostStageItemAtWorld(wClick.x, wClick.y);
+      if (hitTop) {
+        if (!App.stage.selectedIds.has(hitTop.id)) {
+          setStageSelection([hitTop.id], hitTop.id);
+        }
+        openStageLayerContextMenu(e.clientX, e.clientY, hitTop.id);
+        return;
+      }
+      closeStageContextMenu();
     });
   }
 

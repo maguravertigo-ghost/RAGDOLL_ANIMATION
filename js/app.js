@@ -4,7 +4,7 @@
 //  app.js — глобальное состояние App, кэш DOM, математика матриц и модалки
 // ============================================================
 
-const APP_VERSION = 'v0.5.0';
+const APP_VERSION = 'v0.6.0';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const $  = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -31,8 +31,12 @@ const App = {
   grid: {
     showCrosshair: true,
     showGrid:      true,
-    snap:          false,   // по умолчанию выключена
-    step:          4,       // фиксированный мировой размер ячейки сетки
+    snap:          false,     // по умолчанию выключена
+    step:          4,         // мировой размер ячейки сетки (px)
+    majorEvery:    5,         // крупная клетка каждые N шагов (0 = выкл)
+    originMode:    'center',  // 'center' | 'frame-topleft' (для сборки макета 1366×768)
+    color:         '#9fb0c8', // цвет линий сетки
+    opacity:       0.14,      // прозрачность мелкой сетки (0.04..0.65)
   },
   dirty:        false,
   _suppressDirty: false,
@@ -65,6 +69,7 @@ const App = {
     camera:       { x: 0, y: 0, zoom: 0.65 },
     playing:      false,
     previewFullscreen: false,
+    showPreviewFps: true,
     savedCameraBeforePreview: null,
     raf:          null,
     lastTs:       0,
@@ -75,6 +80,9 @@ const App = {
     showRulers:   true,
     guideSnap:    true,
     activeSnapGuides: [],
+    hoveredId:    null,
+    hoveredGuideId: null,
+    collapsedFolders: new Set(),
     barCollapsed: false,
     bgPropsExpanded: false,
     testWidth:    null,
@@ -106,6 +114,22 @@ const App = {
     }
     return true;
   },
+  getGridOrigin() {
+    if (this.editorMode === 'stage' && this.grid.originMode === 'frame-topleft' && this.stage && this.stage.data) {
+      const w = Number(this.stage.testWidth || this.stage.data.width) || 1366;
+      const h = Number(this.stage.testHeight || this.stage.data.height) || 768;
+      return { x: -w / 2, y: -h / 2 };
+    }
+    return { x: 0, y: 0 };
+  },
+  snapWorldToGrid(wx, wy) {
+    const step = Math.max(1, Number(this.grid.step) || 4);
+    const orig = this.getGridOrigin();
+    return {
+      x: orig.x + Math.round((wx - orig.x) / step) * step,
+      y: orig.y + Math.round((wy - orig.y) / step) * step,
+    };
+  },
   snapClientToGrid(clientX, clientY) {
     if (!this.grid.snap || !els.viewport) return { x: clientX, y: clientY };
     const rect = els.viewport.getBoundingClientRect();
@@ -114,13 +138,11 @@ const App = {
     const cx = rect.width / 2;
     const cy = rect.height / 2;
     const z = this.camera.zoom || 1;
-    const step = this.grid.step || 4;
     const wx = (sx - cx) / z + this.camera.x;
     const wy = (sy - cy) / z + this.camera.y;
-    const wxSnap = Math.round(wx / step) * step;
-    const wySnap = Math.round(wy / step) * step;
-    const sxSnap = (wxSnap - this.camera.x) * z + cx;
-    const sySnap = (wySnap - this.camera.y) * z + cy;
+    const snapped = this.snapWorldToGrid(wx, wy);
+    const sxSnap = (snapped.x - this.camera.x) * z + cx;
+    const sySnap = (snapped.y - this.camera.y) * z + cy;
     return { x: sxSnap + rect.left, y: sySnap + rect.top };
   },
   anim: {
@@ -205,17 +227,20 @@ function cacheEls() {
   els.stageRulerV       = $('#stage-ruler-v');
   els.stageRulerVCanvas = $('#stage-ruler-v-canvas');
   els.stageRulerHairY   = $('#stage-ruler-hair-y');
+  els.stagePreviewFpsHud = $('#stage-preview-fps-hud');
 
   // Tools row
   els.zoomLabel         = $('#zoom-label');
   els.btnCrosshair      = $('#btn-crosshair');
   els.btnGrid           = $('#btn-grid');
   els.btnSnap           = $('#btn-snap');
+  els.btnGridSettings   = $('#btn-grid-settings');
   els.btnRealtime       = $('#btn-realtime');
   els.btnResetAnim      = $('#btn-reset-anim');
   els.btnPresets        = $('#btn-presets');
   els.btnStageRulers    = $('#btn-stage-rulers');
   els.btnStageGuideSnap = $('#btn-stage-guide-snap');
+  els.btnStageGuidesMenu = $('#btn-stage-guides-menu');
   els.btnStageAddObj    = $('#btn-stage-add-obj');
   els.btnStageClip      = $('#btn-stage-clip');
   els.btnStagePlayTop   = $('#btn-stage-play-top');
@@ -258,12 +283,16 @@ function cacheEls() {
   els.stagePlay         = $('#stage-play-btn');
   els.stagePlayIcon     = $('#stage-play-icon');
   els.stagePlayLabel    = $('#stage-play-label');
+  els.stagePreviewFpsFlag = $('#stage-preview-fps-flag');
   els.stageSpeed        = $('#stage-speed-slider');
   els.stageSpeedValue   = $('#stage-speed-value');
   els.stageRubberW      = $('#stage-rubber-w');
   els.stageRubberH      = $('#stage-rubber-h');
   els.stageRubberReset  = $('#stage-rubber-reset');
   els.stageRubberReadout = $('#stage-rubber-readout');
+  els.gridSettingsPopover   = $('#grid-settings-popover');
+  els.guidesSettingsPopover = $('#guides-settings-popover');
+  els.stageContextMenu      = $('#stage-context-menu');
 
   // Timeline
   els.timeline          = $('#timeline');

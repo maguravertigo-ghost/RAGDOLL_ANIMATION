@@ -154,6 +154,18 @@ function setupGlobalShortcuts() {
         exitStageFullscreenPreview();
         return;
       }
+      if (els.stageContextMenu && !els.stageContextMenu.hidden) {
+        els.stageContextMenu.hidden = true;
+        return;
+      }
+      if (els.gridSettingsPopover && !els.gridSettingsPopover.hidden && typeof closeGridSettingsPopover === 'function') {
+        closeGridSettingsPopover();
+        return;
+      }
+      if (els.guidesSettingsPopover && !els.guidesSettingsPopover.hidden && typeof closeGuidesSettingsPopover === 'function') {
+        closeGuidesSettingsPopover();
+        return;
+      }
       if (els.modalUnsaved && !els.modalUnsaved.hidden) {
         els.unsavedStay.click();
         return;
@@ -195,6 +207,34 @@ function setupGlobalShortcuts() {
     }
 
     if (App.editorMode === 'stage') {
+      if (e.key === 'F2' && typeof triggerRenameStageItemById === 'function') {
+        if (App.stage.selectedId && App.stage.selectedId !== '__bg__') {
+          e.preventDefault();
+          triggerRenameStageItemById(App.stage.selectedId);
+        }
+        return;
+      }
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+          typeof getSelectedTransformLeafItems === 'function') {
+        const leaves = getSelectedTransformLeafItems();
+        if (leaves.length) {
+          e.preventDefault();
+          const stepPx = e.shiftKey ? 10 : 1;
+          const dx = e.key === 'ArrowLeft' ? -stepPx : (e.key === 'ArrowRight' ? stepPx : 0);
+          const dy = e.key === 'ArrowUp'   ? -stepPx : (e.key === 'ArrowDown'  ? stepPx : 0);
+          const m = getStageFrameMetrics();
+          for (const it of leaves) {
+            const wp = anchorToWorld(it.anchor, m);
+            it.anchor = worldToAnchor(wp.x + dx, wp.y + dy, m);
+            syncStageItemTransform(it, m);
+          }
+          markStageDirty();
+          updateStageSelSize();
+          syncStageInspectorLive();
+          StageGizmo.render();
+        }
+        return;
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') &&
           typeof deleteSelectedStageItems === 'function') {
         const hasStageSel = Array.from(App.stage.selectedIds).some(id => id !== '__bg__');

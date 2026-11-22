@@ -1478,26 +1478,59 @@ aside.right {
   overflow: visible;
 }
 .stage-gizmo-interior {
-  fill: rgba(81, 207, 102, 0.03);
+  fill: rgba(56, 217, 169, 0.035);
   stroke: none;
   pointer-events: all;
   cursor: move;
 }
+.stage-gizmo-box-halo {
+  fill: none;
+  stroke: rgba(8, 12, 18, 0.85);
+  stroke-width: 3.2;
+  pointer-events: none;
+}
 .stage-gizmo-box {
   fill: none;
-  stroke: #51cf66;
-  stroke-width: 1.25;
+  stroke: #38d9a9;
+  stroke-width: 1.55;
   pointer-events: stroke;
   cursor: move;
 }
 .stage-gizmo-box.group-box {
   stroke: #ffd43b;
-  stroke-dasharray: 5 3;
+  stroke-dasharray: 6 3;
+}
+.stage-gizmo-hover-box {
+  fill: rgba(59, 201, 219, 0.04);
+  stroke: #66d9e8;
+  stroke-width: 1.3;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+.stage-gizmo-subbox {
+  fill: none;
+  stroke: rgba(255, 212, 59, 0.58);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+.stage-gizmo-dim-bg {
+  fill: rgba(15, 19, 26, 0.90);
+  stroke: rgba(56, 217, 169, 0.65);
+  stroke-width: 1;
+  rx: 3;
+  pointer-events: none;
+}
+.stage-gizmo-dim-text {
+  fill: #e6fcf5;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10px;
+  pointer-events: none;
 }
 .stage-gizmo-handle {
-  fill: var(--bg);
-  stroke: #51cf66;
-  stroke-width: 1.4;
+  fill: #13171e;
+  stroke: #38d9a9;
+  stroke-width: 1.5;
   pointer-events: all;
 }
 .stage-gizmo-handle.group-handle {
@@ -1885,9 +1918,19 @@ body[data-editor-mode="object"] .stage-ruler-corner {
 .stage-ruler {
   position: absolute;
   background: #1d2128;
-  z-index: 7;
+  z-index: 9;
   user-select: none;
+  -webkit-user-select: none;
   overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  transition: background .12s ease;
+}
+.stage-ruler:hover {
+  background: #252b35;
+}
+.stage-ruler:active {
+  cursor: grabbing;
 }
 .stage-ruler canvas {
   display: block;
@@ -1901,7 +1944,9 @@ body[data-editor-mode="object"] .stage-ruler-corner {
   right: 0;
   height: var(--stage-ruler-size);
   border-bottom: 1px solid #353b45;
-  cursor: ns-resize;
+}
+.stage-ruler-h:hover {
+  border-bottom-color: #3bc9db;
 }
 .stage-ruler-v {
   top: var(--stage-ruler-size);
@@ -1909,7 +1954,12 @@ body[data-editor-mode="object"] .stage-ruler-corner {
   bottom: 0;
   width: var(--stage-ruler-size);
   border-right: 1px solid #353b45;
-  cursor: ew-resize;
+}
+.stage-ruler-v:hover {
+  border-right-color: #3bc9db;
+}
+.stage-ruler-corner {
+  z-index: 10;
 }
 
 .stage-ruler-hair {
@@ -1931,7 +1981,10 @@ body[data-editor-mode="object"] .stage-ruler-corner {
   transform: translateY(-100px);
 }
 
-/* SVG-слой направляющих поверх сцены */
+/* SVG-слой направляющих поверх сцены и гизмо */
+#stage-gizmo-svg {
+  z-index: 6;
+}
 #stage-guides-svg {
   position: absolute;
   top: 0;
@@ -1940,52 +1993,69 @@ body[data-editor-mode="object"] .stage-ruler-corner {
   height: 100%;
   pointer-events: none;
   overflow: hidden;
-  z-index: 5;
+  z-index: 8;
 }
-#stage-gizmo-svg {
-  z-index: 6;
+body.guide-dragging,
+body.guide-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+body.guide-dragging #stage-guides-svg {
+  z-index: 11;
 }
 .stage-guide-line {
   stroke: #3bc9db;
-  stroke-width: 1px;
+  stroke-width: 1.15px;
   stroke-dasharray: 5 3;
   pointer-events: none;
 }
+.stage-guide-line.hovered {
+  stroke-width: 1.8px;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 3px rgba(59, 201, 219, 0.7));
+}
 .stage-guide-line.dragging {
-  stroke: #ffd43b;
-  stroke-width: 1.4px;
+  stroke: #ffd43b !important;
+  stroke-width: 1.7px;
   stroke-dasharray: none;
 }
+.stage-guide-line.will-delete {
+  stroke: #ff6b6b !important;
+  stroke-width: 1.7px;
+  stroke-dasharray: 3 3;
+}
 .stage-guide-line.active-snap {
-  stroke: #ff6b6b;
-  stroke-width: 1.6px;
+  stroke: #ff6b6b !important;
+  stroke-width: 1.8px;
   stroke-dasharray: none;
 }
 .stage-guide-hit {
-  stroke: transparent;
-  stroke-width: 11px;
-  pointer-events: stroke;
+  fill: rgba(0, 0, 0, 0.002);
+  stroke: none;
+  pointer-events: all;
+  cursor: grab;
 }
-.stage-guide-hit.guide-h {
-  cursor: ns-resize;
-}
-.stage-guide-hit.guide-v {
-  cursor: ew-resize;
+.stage-guide-hit:active {
+  cursor: grabbing;
 }
 .stage-guide-badge-bg {
-  fill: rgba(19, 23, 29, 0.92);
+  fill: rgba(19, 23, 29, 0.94);
   stroke: #3bc9db;
   stroke-width: 1px;
-  rx: 3px;
+  rx: 4px;
   pointer-events: none;
 }
 .stage-guide-badge-bg.dragging {
   stroke: #ffd43b;
 }
+.stage-guide-badge-bg.will-delete {
+  fill: rgba(95, 22, 27, 0.95);
+  stroke: #ff6b6b;
+}
 .stage-guide-badge-text {
   fill: #e9ecef;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 10px;
+  font-size: 10.5px;
   pointer-events: none;
 }
 
@@ -2045,6 +2115,8 @@ body.stage-preview-fullscreen #gizmo-svg,
 body.stage-preview-fullscreen #grid,
 body.stage-preview-fullscreen .stage-frame-border,
 body.stage-preview-fullscreen .stage-shadow-rect,
+body.stage-preview-fullscreen .floating-popover,
+body.stage-preview-fullscreen .stage-context-menu,
 body.stage-preview-fullscreen #hint {
   display: none !important;
 }
@@ -2060,4 +2132,275 @@ body.stage-preview-fullscreen section.center {
 }
 body.stage-preview-fullscreen .viewport {
   background: #090b0f !important;
+}
+
+/* Флаг FPS справа от кнопки Предпросмотра и HUD реальной нагрузки */
+.stage-fps-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 5px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.stage-fps-check:hover {
+  background: var(--bg-4);
+  border-color: #51cf66;
+}
+.stage-fps-check input[type="checkbox"] {
+  accent-color: #37b24d;
+  margin: 0;
+  cursor: pointer;
+}
+
+.stage-preview-fps-hud {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 25;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: rgba(12, 16, 22, 0.82);
+  border: 1px solid rgba(105, 219, 124, 0.45);
+  color: #8ce99a;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.stage-preview-fps-hud.fps-warn {
+  border-color: rgba(255, 212, 59, 0.55);
+  color: #ffd43b;
+}
+.stage-preview-fps-hud.fps-low {
+  border-color: rgba(255, 107, 107, 0.6);
+  color: #ff8787;
+}
+
+/* Сворачивание папок и быстрый выбор всех объектов папки в списке слоёв сцены */
+.stage-folder-twist,
+.stage-folder-selall {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  display: inline-grid;
+  place-items: center;
+  border-radius: 3px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.stage-folder-twist:hover,
+.stage-folder-selall:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+.stage-folder-twist .material-icons {
+  font-size: 15px;
+}
+.stage-folder-selall .material-icons {
+  font-size: 13.5px;
+  color: #ffd43b;
+}
+
+/* Всплывающие поповеры (Настройка сетки и Меню направляющих) */
+.floating-popover {
+  position: fixed;
+  z-index: 120;
+  width: 286px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: #21252d;
+  border: 1px solid #3c4350;
+  border-radius: 8px;
+  padding: 10px 11px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.62);
+  color: var(--fg);
+  font-size: 12px;
+}
+.floating-popover[hidden],
+.stage-context-menu[hidden],
+.stage-preview-fps-hud[hidden] {
+  display: none !important;
+}
+.popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 12px;
+  color: #ffffff;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.popover-section {
+  margin-bottom: 9px;
+}
+.popover-label {
+  display: block;
+  font-size: 11px;
+  color: var(--fg-dim);
+  margin-bottom: 4px;
+}
+.swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  padding: 0;
+}
+.color-swatch.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(81, 207, 102, 0.6);
+}
+.guide-list-mini {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  max-height: 145px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-3);
+}
+.guide-list-mini li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.guide-list-mini li:last-child {
+  border-bottom: none;
+}
+.guide-list-mini li.empty {
+  color: var(--fg-mute);
+  font-family: inherit;
+  justify-content: center;
+  padding: 8px;
+}
+.guide-del-x {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.guide-del-x:hover {
+  background: rgba(255, 107, 107, 0.22);
+  color: #ff8787;
+}
+
+/* Кастомное контекстное ПКМ-меню Редактора сцены */
+.stage-context-menu {
+  position: fixed;
+  z-index: 150;
+  min-width: 215px;
+  max-width: 280px;
+  background: #20242c;
+  border: 1px solid #3f4756;
+  border-radius: 7px;
+  padding: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+  user-select: none;
+}
+.ctx-menu-header {
+  padding: 4px 9px 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #8ce99a;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ctx-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-menu-item:hover:not(:disabled) {
+  background: rgba(56, 217, 169, 0.16);
+  color: #ffffff;
+}
+.ctx-menu-item.danger:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.20);
+  color: #ff8787;
+}
+.ctx-menu-item .material-icons {
+  font-size: 15px;
+  color: var(--fg-dim);
+}
+.ctx-menu-item:hover .material-icons {
+  color: inherit;
+}
+.ctx-menu-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 3px 4px;
+}
+
+/* Кнопки быстрого выравнивания и позиционирования в Свойствах сцены */
+.stage-align-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin: 5px 0;
+}
+.stage-align-btn {
+  height: 26px;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--fg);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.stage-align-btn:hover {
+  background: var(--bg-4);
+  border-color: #38d9a9;
+  color: #ffffff;
+}
+.stage-align-btn .material-icons {
+  font-size: 15px;
 }
