@@ -20,6 +20,7 @@ const HOST     = process.env.HOST || '0.0.0.0';
 
 const ROOT      = __dirname;
 const ANIM_DIR  = path.join(ROOT, 'anim');
+const STAGE_DIR = path.join(ROOT, 'stage');
 const PORT_FILE = path.join(ROOT, 'port.txt');
 
 // ------------------------------------------------------------
@@ -407,6 +408,258 @@ function apiPresetsSave(req, res) {
 }
 
 // ------------------------------------------------------------
+// API сцен (stage/)
+// ------------------------------------------------------------
+
+function buildDefaultStage(name) {
+  return {
+    version: 1,
+    name: name,
+    frame: { width: 1366, height: 768 },
+    background: {
+      color: '#243447',
+      file: '',
+      fit: 'stretch',
+      opacity: 1
+    },
+    items: []
+  };
+}
+
+function listStageNames() {
+  ensureDir(STAGE_DIR);
+  return fs.readdirSync(STAGE_DIR, { withFileTypes: true })
+    .filter(function (d) { return d.isDirectory() && !d.name.startsWith('.'); })
+    .map(function (d) { return d.name; })
+    .sort(function (a, b) { return a.localeCompare(b); });
+}
+
+function listStageAssetsInDir(dir) {
+  return fs.readdirSync(dir)
+    .filter(function (f) { return /\.(svg|png|jpe?g|webp|gif)$/i.test(f); })
+    .sort(function (a, b) { return a.localeCompare(b); });
+}
+
+function apiStages(req, res) {
+  try {
+    sendJson(res, 200, listStageNames());
+  } catch (e) {
+    sendJson(res, 500, { error: e.message });
+  }
+}
+
+function apiStageGet(req, res, name) {
+  const safe = safeName(name);
+  if (!safe) return sendJson(res, 400, { error: 'Некорректное имя сцены' });
+  const dir = path.join(STAGE_DIR, safe);
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Сцена не найдена' });
+  }
+
+  try {
+    const assets = listStageAssetsInDir(dir);
+    const stagePath = path.join(dir, 'stage.json');
+    let stageData = null;
+    if (fs.existsSync(stagePath)) {
+      stageData = JSON.parse(fs.readFileSync(stagePath, 'utf8'));
+    } else {
+      stageData = buildDefaultStage(safe);
+      fs.writeFileSync(stagePath, JSON.stringify(stageData, null, 2), 'utf8');
+    }
+    sendJson(res, 200, { name: safe, assets: assets, stage: stageData });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message });
+  }
+}
+
+function apiStageSave(req, res, name) {
+  const safe = safeName(name);
+  if (!safe) return sendJson(res, 400, { error: 'Некорректное имя сцены' });
+  const dir = path.join(STAGE_DIR, safe);
+  ensureDir(dir);
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON: ' + e.message }); }
+    try {
+      const stagePath = path.join(dir, 'stage.json');
+      fs.writeFileSync(stagePath, JSON.stringify(data, null, 2), 'utf8');
+      sendJson(res, 200, { ok: true, path: path.relative(ROOT, stagePath) });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiStageCreate(req, res) {
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const used = new Set(listStageNames());
+    let candidate = data.name ? safeName(data.name) : '';
+    if (!candidate) {
+      let idx = 0;
+      while (used.has('untitled_' + idx)) idx++;
+      candidate = 'untitled_' + idx;
+    }
+    const dir = path.join(STAGE_DIR, candidate);
+    if (fs.existsSync(dir)) {
+      return sendJson(res, 409, { error: 'Сцена «' + candidate + '» уже существует' });
+    }
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const stageData = buildDefaultStage(candidate);
+      fs.writeFileSync(path.join(dir, 'stage.json'), JSON.stringify(stageData, null, 2), 'utf8');
+      sendJson(res, 200, { ok: true, name: candidate });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiStageClone(req, res, srcName) {
+  const safeSrc = safeName(srcName);
+  if (!safeSrc) return sendJson(res, 400, { error: 'Некорректное имя сцены' });
+  const srcDir = path.join(STAGE_DIR, safeSrc);
+  if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Исходная сцена не найдена' });
+  }
+
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const used = new Set(listStageNames());
+    let safeDst = data.newName ? safeName(data.newName) : '';
+    if (!safeDst) {
+      const stem = String(safeSrc).replace(/_clone_\d+$/, '');
+      let idx = 0;
+      while (used.has(stem + '_clone_' + idx)) idx++;
+      safeDst = stem + '_clone_' + idx;
+    }
+    const dstDir = path.join(STAGE_DIR, safeDst);
+    if (fs.existsSync(dstDir)) {
+      return sendJson(res, 409, { error: 'Сцена «' + safeDst + '» уже существует' });
+    }
+
+    try {
+      fs.mkdirSync(dstDir, { recursive: true });
+      const files = fs.readdirSync(srcDir, { withFileTypes: true });
+      for (const f of files) {
+        if (!f.isFile()) continue;
+        fs.copyFileSync(path.join(srcDir, f.name), path.join(dstDir, f.name));
+      }
+      const stPath = path.join(dstDir, 'stage.json');
+      if (fs.existsSync(stPath)) {
+        try {
+          const stObj = JSON.parse(fs.readFileSync(stPath, 'utf8'));
+          stObj.name = safeDst;
+          fs.writeFileSync(stPath, JSON.stringify(stObj, null, 2), 'utf8');
+        } catch (_) {}
+      }
+      sendJson(res, 200, { ok: true, name: safeDst });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiStageRename(req, res, oldName) {
+  const safeOld = safeName(oldName);
+  if (!safeOld) return sendJson(res, 400, { error: 'Некорректное имя сцены' });
+  const oldDir = path.join(STAGE_DIR, safeOld);
+  if (!fs.existsSync(oldDir) || !fs.statSync(oldDir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Сцена не найдена' });
+  }
+
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const safeNew = safeName(data.newName);
+    if (!safeNew) return sendJson(res, 400, { error: 'Некорректное новое имя' });
+    if (safeNew === safeOld) return sendJson(res, 200, { ok: true, name: safeNew });
+
+    const newDir = path.join(STAGE_DIR, safeNew);
+    if (fs.existsSync(newDir)) {
+      return sendJson(res, 409, { error: 'Сцена «' + safeNew + '» уже существует' });
+    }
+
+    try {
+      fs.renameSync(oldDir, newDir);
+      const stPath = path.join(newDir, 'stage.json');
+      if (fs.existsSync(stPath)) {
+        try {
+          const stObj = JSON.parse(fs.readFileSync(stPath, 'utf8'));
+          stObj.name = safeNew;
+          fs.writeFileSync(stPath, JSON.stringify(stObj, null, 2), 'utf8');
+        } catch (_) {}
+      }
+      sendJson(res, 200, { ok: true, name: safeNew });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiStageDelete(req, res, name) {
+  const safe = safeName(name);
+  if (!safe) return sendJson(res, 400, { error: 'Некорректное имя сцены' });
+  const dir = path.join(STAGE_DIR, safe);
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Сцена не найдена' });
+  }
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+    sendJson(res, 200, { ok: true, name: safe });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message });
+  }
+}
+
+function apiStageUploadAsset(req, res, name) {
+  const safe = safeName(name);
+  if (!safe) return sendJson(res, 400, { error: 'Некорректное имя сцены' });
+  const dir = path.join(STAGE_DIR, safe);
+  ensureDir(dir);
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const fileName = safeName(data.fileName);
+    if (!fileName || !/\.(svg|png|jpe?g|webp|gif)$/i.test(fileName)) {
+      return sendJson(res, 400, { error: 'Поддерживаются файлы SVG, PNG, JPG, WebP, GIF' });
+    }
+    try {
+      const targetPath = path.join(dir, fileName);
+      if (typeof data.dataBase64 === 'string' && data.dataBase64.length > 0) {
+        fs.writeFileSync(targetPath, Buffer.from(data.dataBase64, 'base64'));
+      } else if (typeof data.dataUrl === 'string' && data.dataUrl.indexOf('base64,') >= 0) {
+        const b64 = data.dataUrl.split('base64,')[1];
+        fs.writeFileSync(targetPath, Buffer.from(b64, 'base64'));
+      } else if (typeof data.text === 'string') {
+        fs.writeFileSync(targetPath, data.text, 'utf8');
+      } else {
+        return sendJson(res, 400, { error: 'Пустое содержимое файла' });
+      }
+      sendJson(res, 200, { ok: true, fileName: fileName, assets: listStageAssetsInDir(dir) });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+// ------------------------------------------------------------
 // роутер
 // ------------------------------------------------------------
 
@@ -422,6 +675,14 @@ function handle(req, res) {
 
   if (pathname === '/api/objects/create' && method === 'POST') {
     return apiObjectCreate(req, res);
+  }
+
+  if (pathname === '/api/stages' && method === 'GET') {
+    return apiStages(req, res);
+  }
+
+  if (pathname === '/api/stages/create' && method === 'POST') {
+    return apiStageCreate(req, res);
   }
 
   if (pathname === '/api/presets' && method === 'GET') {
@@ -457,6 +718,36 @@ function handle(req, res) {
     return apiObjectDelete(req, res, m[1]);
   }
 
+  m = pathname.match(/^\/api\/stage\/([^\/]+)$/);
+  if (m && method === 'GET') {
+    return apiStageGet(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/stage\/([^\/]+)\/save$/);
+  if (m && method === 'POST') {
+    return apiStageSave(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/stage\/([^\/]+)\/clone$/);
+  if (m && method === 'POST') {
+    return apiStageClone(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/stage\/([^\/]+)\/rename$/);
+  if (m && method === 'POST') {
+    return apiStageRename(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/stage\/([^\/]+)\/delete$/);
+  if (m && method === 'POST') {
+    return apiStageDelete(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/stage\/([^\/]+)\/upload$/);
+  if (m && method === 'POST') {
+    return apiStageUploadAsset(req, res, m[1]);
+  }
+
   if (pathname.indexOf('/api/') === 0) {
     return sendJson(res, 404, { error: 'API not found: ' + pathname });
   }
@@ -487,6 +778,7 @@ function handle(req, res) {
 
 async function main() {
   ensureDir(ANIM_DIR);
+  ensureDir(STAGE_DIR);
 
   const PORT = await findFreePort();
 

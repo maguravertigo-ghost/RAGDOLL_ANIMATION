@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "field",
+  "frame": {
+    "width": 1366,
+    "height": 768
+  },
+  "background": {
+    "color": "#243447",
+    "file": "",
+    "fit": "stretch",
+    "opacity": 1
+  },
+  "items": []
+}

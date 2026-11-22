@@ -4,7 +4,7 @@
 //  app.js — глобальное состояние App, кэш DOM, математика матриц и модалки
 // ============================================================
 
-const APP_VERSION = 'v0.3.0';
+const APP_VERSION = 'v0.4.0';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const $  = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -19,6 +19,8 @@ const ANIM_PROPS = ['position', 'rotation', 'scale', 'skew', 'visible'];
 
 const App = {
   version:      APP_VERSION,
+  editorMode:   'object', // 'object' | 'stage'
+  objectCamera: { x: 0, y: 0, zoom: 1 },
   current:      null,
   settings:     null,
   svgCache:     {},
@@ -35,6 +37,7 @@ const App = {
   dirty:        false,
   _suppressDirty: false,
   spaceDown:    false,
+  ctrlDown:     false,
   panning:      false,
   panStart:     null,
   realtime:     true,
@@ -51,6 +54,37 @@ const App = {
   _onionPoolDirty: true,
   presets:      [],
   _selectedPresetId: null,
+  stage: {
+    current:      null,
+    data:         null,
+    assets:       [],
+    selectedId:   '__bg__',
+    selectedIds:  new Set(['__bg__']),
+    dirty:        false,
+    _suppressDirty: false,
+    camera:       { x: 0, y: 0, zoom: 0.65 },
+    playing:      false,
+    raf:          null,
+    lastTs:       0,
+    time:         0,
+    speed:        1,
+    fpsSamples:   [],
+    clipFrame:    false,
+    testWidth:    null,
+    testHeight:   null,
+    _selectedModalName: null,
+    _pickTab:     'object',
+    _pickSelected: null,
+    _pendingFolderId: null,
+    _uploadTarget: null, // 'bg' | 'asset'
+    customStages: {},
+    deletedStages: new Set(),
+    templates:    {},    // { [objName]: { settings, svgs } }
+    assetCache:   {},    // { ['stage/file']: { kind, svgText, viewBox, width, height, unitToPx, dataUrl } }
+    domItems:     {},    // { [itemId]: runtimeInstance }
+    bgDom:        null,
+    frameDom:     null,
+  },
   isPartVisible(part) {
     if (!part) return false;
     if (part.visible === false) return false;
@@ -117,6 +151,12 @@ const els = {};
 function cacheEls() {
   // Header
   els.appVersion         = $('#app-version');
+  els.btnEditorMode      = $('#btn-editor-mode');
+  els.editorModeIcon     = $('#editor-mode-icon');
+  els.editorModeLabel    = $('#editor-mode-label');
+  els.headerObjectControls = $('#header-object-controls');
+  els.headerStageControls  = $('#header-stage-controls');
+
   els.btnObjects         = $('#btn-objects');
   els.objNameGroup       = $('#obj-name-group');
   els.objName            = $('#obj-name');
@@ -125,6 +165,14 @@ function cacheEls() {
   els.animNameGroup      = $('#anim-name-group');
   els.animName           = $('#anim-name');
   els.btnAnimInlineRename = $('#btn-anim-inline-rename');
+
+  els.btnStages            = $('#btn-stages');
+  els.stageNameGroup       = $('#stage-name-group');
+  els.stageName            = $('#stage-name');
+  els.btnStageInlineRename = $('#btn-stage-inline-rename');
+  els.btnStageFit          = $('#btn-stage-fit');
+  els.stageResLabel        = $('#stage-res-label');
+
   els.btnStorageStatus   = $('#btn-storage-status');
   els.storageDot         = $('#storage-dot');
   els.storageLabel       = $('#storage-label');
@@ -134,11 +182,14 @@ function cacheEls() {
   // Viewport & SVG
   els.viewport          = $('#viewport');
   els.svg               = $('#scene-svg');
+  els.stageDefs         = $('#stage-defs');
   els.world             = $('#world');
   els.grid              = $('#grid');
+  els.stageRoot         = $('#stage-root');
   els.onion             = $('#onion');
   els.scene             = $('#scene');
   els.gizmoSvg          = $('#gizmo-svg');
+  els.stageGizmoSvg     = $('#stage-gizmo-svg');
 
   // Tools row
   els.zoomLabel         = $('#zoom-label');
@@ -148,6 +199,10 @@ function cacheEls() {
   els.btnRealtime       = $('#btn-realtime');
   els.btnResetAnim      = $('#btn-reset-anim');
   els.btnPresets        = $('#btn-presets');
+  els.btnStageClip      = $('#btn-stage-clip');
+  els.btnStageCenter    = $('#btn-stage-center');
+  els.stageHintDrag     = $('#stage-hint-drag');
+  els.stageFpsBadge     = $('#stage-fps-badge');
   els.btnBg             = $('#btn-bg');
   els.fpsSlider         = $('#fps-slider');
   els.fpsValue          = $('#fps-value');
@@ -156,6 +211,7 @@ function cacheEls() {
   els.timelineToggleIcon = $('#timeline-toggle-icon');
 
   // Playback row
+  els.playbackBar       = $('#playback-bar');
   els.pbFirst           = $('#pb-first');
   els.pbPrev            = $('#pb-prev');
   els.pbPlay            = $('#pb-play');
@@ -177,6 +233,18 @@ function cacheEls() {
   els.onionAfter        = $('#onion-after');
   els.pbDuration        = $('#pb-duration');
 
+  // Stage preview & rubber screen bar
+  els.stageBar          = $('#stage-bar');
+  els.stagePlay         = $('#stage-play');
+  els.stagePlayIcon     = $('#stage-play-icon');
+  els.stagePlayLabel    = $('#stage-play-label');
+  els.stageStop         = $('#stage-stop');
+  els.stageSpeed        = $('#stage-speed');
+  els.stageRubberW      = $('#stage-rubber-w');
+  els.stageRubberH      = $('#stage-rubber-h');
+  els.stageRubberReset  = $('#stage-rubber-reset');
+  els.stageRubberReadout = $('#stage-rubber-readout');
+
   // Timeline
   els.timeline          = $('#timeline');
   els.tlRuler           = $('#tl-ruler');
@@ -187,15 +255,41 @@ function cacheEls() {
   els.tlPlayheadLine    = $('#tl-playhead-line');
 
   // Right panel (Layers & Properties)
+  els.layersHeaderTitle    = $('#layers-header-title');
+  els.layersActionsObject  = $('#layers-actions-object');
+  els.layersActionsStage   = $('#layers-actions-stage');
   els.btnGroup          = $('#btn-group');
   els.btnUngroup        = $('#btn-ungroup');
+  els.btnStageAddLayer  = $('#btn-stage-add-layer');
+  els.btnStageAddFolder = $('#btn-stage-add-folder');
+  els.btnStageDelLayer  = $('#btn-stage-del-layer');
   els.layersList        = $('#layers-list');
+  els.stageLayersList   = $('#stage-layers-list');
+  els.stageFileInput    = $('#stage-file-input');
   els.propsTitle        = $('#props-title');
   els.btnPropsCollapse  = $('#btn-props-collapse');
   els.propsCollapseIcon = $('#props-collapse-icon');
   els.props             = $('#props');
 
   // Modals
+  els.modalStages        = $('#modal-stages');
+  els.modalStagesX       = $('#modal-stages-x');
+  els.stagesList         = $('#stages-list');
+  els.stageAdd           = $('#stage-add');
+  els.stageClone         = $('#stage-clone');
+  els.stageRename        = $('#stage-rename');
+  els.stageDelete        = $('#stage-delete');
+  els.stageOpen          = $('#stage-open');
+  els.modalStagesClose   = $('#modal-stages-close');
+
+  els.modalStagePickObj  = $('#modal-stage-pick-obj');
+  els.stagePickCloseX    = $('#stage-pick-close-x');
+  els.stagePickTabObj    = $('#stage-pick-tab-obj');
+  els.stagePickTabAsset  = $('#stage-pick-tab-asset');
+  els.stagePickList      = $('#stage-pick-list');
+  els.stagePickUpload    = $('#stage-pick-upload');
+  els.stagePickCancel    = $('#stage-pick-cancel');
+  els.stagePickAdd       = $('#stage-pick-add');
   els.modalObjects       = $('#modal-objects');
   els.modalObjectsX      = $('#modal-objects-x');
   els.objectsSourceBar   = $('#objects-source-bar');
@@ -516,10 +610,17 @@ function confirmDialog(title, text, onConfirm) {
 
 function updateSaveButtonUI() {
   if (!els.btnSave) return;
-  els.btnSave.classList.toggle('dirty', !!App.dirty);
-  els.btnSave.title = App.dirty
-    ? 'Есть несохранённые изменения! Сохранить (Ctrl+S)'
-    : 'Сохранить (Ctrl+S)';
+  const isDirty = App.editorMode === 'stage' ? !!App.stage.dirty : !!App.dirty;
+  els.btnSave.classList.toggle('dirty', isDirty);
+  if (App.editorMode === 'stage') {
+    els.btnSave.title = isDirty
+      ? 'Есть несохранённые изменения сцены! Сохранить сцену (Ctrl+S)'
+      : 'Сохранить сцену (Ctrl+S)';
+  } else {
+    els.btnSave.title = isDirty
+      ? 'Есть несохранённые изменения! Сохранить объект (Ctrl+S)'
+      : 'Сохранить объект (Ctrl+S)';
+  }
 }
 
 function markDirty() {
@@ -533,6 +634,69 @@ function markDirty() {
 function clearDirty() {
   App.dirty = false;
   updateSaveButtonUI();
+}
+
+function markStageDirty() {
+  if (!App.stage.data || App.stage._suppressDirty) return;
+  if (!App.stage.dirty) {
+    App.stage.dirty = true;
+    updateSaveButtonUI();
+  }
+}
+
+function clearStageDirty() {
+  App.stage.dirty = false;
+  updateSaveButtonUI();
+}
+
+function guardStageUnsavedChanges(proceedFn) {
+  if (!App.stage.dirty || !App.stage.current || !els.modalUnsaved) {
+    proceedFn();
+    return;
+  }
+  els.unsavedText.textContent =
+    'В сцене «' + App.stage.current + '» есть несохранённые изменения. ' +
+    'Сохранить их перед переключением?';
+  els.modalUnsaved.hidden = false;
+  setTimeout(() => { if (els.unsavedSave) els.unsavedSave.focus(); }, 0);
+
+  function cleanup() {
+    els.modalUnsaved.hidden = true;
+    els.unsavedSave.removeEventListener('click', onSave);
+    els.unsavedStay.removeEventListener('click', onStay);
+    els.unsavedDiscard.removeEventListener('click', onDiscard);
+    document.removeEventListener('keydown', onKey);
+    els.modalUnsaved.removeEventListener('mousedown', onBg);
+  }
+  async function onSave() {
+    cleanup();
+    if (typeof saveCurrentStage === 'function') {
+      const ok = await saveCurrentStage();
+      if (ok && !App.stage.dirty) proceedFn();
+    }
+  }
+  function onStay() {
+    cleanup();
+    if (els.modalStages && !els.modalStages.hidden && typeof closeStagesModal === 'function') {
+      closeStagesModal();
+    }
+  }
+  function onDiscard() {
+    cleanup();
+    clearStageDirty();
+    proceedFn();
+  }
+  function onKey(e) {
+    if (els.modalUnsaved.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); onStay(); }
+  }
+  function onBg(e) { if (e.target === els.modalUnsaved) onStay(); }
+
+  els.unsavedSave.addEventListener('click', onSave);
+  els.unsavedStay.addEventListener('click', onStay);
+  els.unsavedDiscard.addEventListener('click', onDiscard);
+  document.addEventListener('keydown', onKey);
+  els.modalUnsaved.addEventListener('mousedown', onBg);
 }
 
 function guardUnsavedChanges(proceedFn) {

@@ -325,8 +325,12 @@ function applyCamera() {
   );
   els.zoomLabel.textContent = Math.round(z * 100) + '%';
   rebuildGrid();
-  Gizmo.render();
-  if (!App.selectedId) renderProperties();
+  if (App.editorMode === 'stage') {
+    if (typeof StageGizmo !== 'undefined') StageGizmo.render();
+  } else {
+    Gizmo.render();
+    if (!App.selectedId) renderProperties();
+  }
 }
 
 function screenToWorld(sx, sy) {
@@ -341,6 +345,10 @@ function screenToWorld(sx, sy) {
 }
 
 function fitView() {
+  if (App.editorMode === 'stage') {
+    if (typeof fitStageView === 'function') fitStageView();
+    return;
+  }
   if (!App.settings) return;
   App.camera.x = 0;
   App.camera.y = 0;
@@ -374,6 +382,7 @@ function zoomBy(factor) {
 }
 
 function isViewportLightBg() {
+  if (App.editorMode === 'stage') return false;
   const bg = (App.settings && App.settings.frame && App.settings.frame.background) || 'grid';
   if (bg === 'grid' || bg === 'checkerboard') return false;
   const rgb = hexToRgb(bg);
@@ -742,6 +751,12 @@ function setupSceneInput() {
       return;
     }
     if (e.button === 0) {
+      if (App.editorMode === 'stage') {
+        if (typeof handleStageViewportMouseDown === 'function') {
+          handleStageViewportMouseDown(e);
+        }
+        return;
+      }
       if (e.target.closest && e.target.closest('#gizmo-svg')) return;
       const partEl = e.target.closest && e.target.closest('[data-part-id]:not(.part-hidden)');
       const id = partEl ? partEl.getAttribute('data-part-id') : null;

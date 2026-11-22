@@ -1,0 +1,10 @@
+{
+  "stages": {
+    "field": [
+      "grass_background_line.svg",
+      "grass_line.svg",
+      "ground.svg",
+      "skyline.svg"
+    ]
+  }
+}

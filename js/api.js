@@ -210,10 +210,15 @@ function parseSvgDocument(text, file) {
   if (doc.querySelector('parsererror')) throw new Error('SVG parse error: ' + file);
   const root = doc.documentElement;
   sanitizeSvgRoot(root);
+  const origW = parseFloat(root.getAttribute('width'));
   const vb = root.getAttribute('viewBox');
+  let unitToPx = 1;
   if (vb) {
     const m = vb.trim().split(/[\s,]+/).map(parseFloat);
     if (m.length === 4 && m[2] > 0 && m[3] > 0) {
+      if (isFinite(origW) && origW > 0 && Math.abs(origW - m[2]) > 1e-3) {
+        unitToPx = origW / m[2];
+      }
       root.setAttribute('width', m[2]);
       root.setAttribute('height', m[3]);
     }
@@ -223,6 +228,7 @@ function parseSvgDocument(text, file) {
     if (!isFinite(w) || w <= 0) root.setAttribute('width', 100);
     if (!isFinite(h) || h <= 0) root.setAttribute('height', 100);
   }
+  root._unitToPx = unitToPx;
   return root;
 }
 
@@ -233,14 +239,31 @@ async function resolveAnimDirectory(pickedHandle) {
   try {
     const subAnim = await pickedHandle.getDirectoryHandle('anim');
     if (subAnim) {
+      let subStage = null;
+      try { subStage = await pickedHandle.getDirectoryHandle('stage', { create: true }); }
+      catch (_) {
+        try { subStage = await pickedHandle.getDirectoryHandle('stage'); } catch (_2) {}
+      }
       return {
         rootHandle: pickedHandle,
         animHandle: subAnim,
+        stageHandle: subStage,
         singleObjHandle: null,
-        label: pickedHandle.name + '/anim'
+        label: pickedHandle.name
       };
     }
   } catch (_) {}
+
+  // 1b) Пользователь выбрал непосредственно папку stage/
+  if (String(pickedHandle.name || '').toLowerCase() === 'stage') {
+    return {
+      rootHandle: null,
+      animHandle: null,
+      stageHandle: pickedHandle,
+      singleObjHandle: null,
+      label: pickedHandle.name
+    };
+  }
 
   // 2) Проверяем содержимое выбранной папки
   let hasSubDirs = false;
@@ -255,6 +278,7 @@ async function resolveAnimDirectory(pickedHandle) {
     return {
       rootHandle: null,
       animHandle: null,
+      stageHandle: null,
       singleObjHandle: pickedHandle,
       label: pickedHandle.name
     };
@@ -264,6 +288,7 @@ async function resolveAnimDirectory(pickedHandle) {
   return {
     rootHandle: null,
     animHandle: pickedHandle,
+    stageHandle: null,
     singleObjHandle: null,
     label: pickedHandle.name
   };
@@ -274,9 +299,11 @@ async function activateDirectoryHandle(handle, saveToPrefs) {
   App.storage.mode            = 'local-fs';
   App.storage.rootHandle      = resolved.rootHandle;
   App.storage.animHandle      = resolved.animHandle;
+  App.storage.stageHandle     = resolved.stageHandle;
   App.storage.singleObjHandle = resolved.singleObjHandle;
   App.storage.pendingHandle   = null;
   App.storage.memoryObjects   = null;
+  App.storage.memoryStages    = null;
   App.storage.folderLabel     = resolved.label;
 
   if (saveToPrefs) {
@@ -323,13 +350,37 @@ async function handleWebkitDirFiles(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
 
-  // Группируем файлы по папкам объектов
+  // Группируем файлы по папкам объектов и сцен
   const mem = {};
+  const memStages = {};
   let rootName = '';
   for (const f of files) {
     const rel = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
     const segs = rel.split('/').filter(Boolean);
     if (!rootName && segs.length) rootName = segs[0];
+
+    const stageIdx = segs.indexOf('stage');
+    if (stageIdx >= 0 && segs.length >= stageIdx + 3) {
+      const stName = segs[stageIdx + 1];
+      const fName = segs[segs.length - 1];
+      if (stName && !stName.startsWith('.')) {
+        if (!memStages[stName]) memStages[stName] = { files: {}, stage: null };
+        if (fName === 'stage.json') {
+          try { memStages[stName].stage = JSON.parse(await f.text()); } catch (_) {}
+        } else if (/\.(svg)$/i.test(fName)) {
+          memStages[stName].files[fName] = { kind: 'svg', text: await f.text() };
+        } else if (/\.(png|jpe?g|webp|gif)$/i.test(fName)) {
+          const dataUrl = await new Promise((res) => {
+            const fr = new FileReader();
+            fr.onload = () => res(String(fr.result || ''));
+            fr.onerror = () => res('');
+            fr.readAsDataURL(f);
+          });
+          memStages[stName].files[fName] = { kind: 'raster', dataUrl };
+        }
+      }
+      continue;
+    }
 
     let objName = null;
     let fileName = segs[segs.length - 1];
@@ -352,13 +403,14 @@ async function handleWebkitDirFiles(fileList) {
   }
 
   const names = Object.keys(mem);
-  if (!names.length) {
+  if (!names.length && !Object.keys(memStages).length) {
     setHint('В выбранной папке не найдено SVG-объектов', 3000);
     return;
   }
 
   App.storage.mode            = 'local-files';
   App.storage.memoryObjects   = mem;
+  App.storage.memoryStages    = memStages;
   App.storage.folderLabel     = rootName || 'локальные файлы';
   App.storage.pendingHandle   = null;
   setPref(PREF_FOLDER, App.storage.folderLabel);
@@ -406,9 +458,11 @@ async function clearSavedFolder() {
   delPref(PREF_FOLDER);
   App.storage.rootHandle      = null;
   App.storage.animHandle      = null;
+  App.storage.stageHandle     = null;
   App.storage.singleObjHandle = null;
   App.storage.pendingHandle   = null;
   App.storage.memoryObjects   = null;
+  App.storage.memoryStages    = null;
   App.storage.folderLabel     = '';
   App.storage.mode            = App.storage.serverAvailable ? 'server' : 'repo';
   updateStorageUI();
@@ -847,6 +901,9 @@ async function saveObject() {
     return false;
   }
   const jsonText = JSON.stringify(out, null, 2);
+  if (App.stage && App.stage.templates && App.current) {
+    delete App.stage.templates[App.current];
+  }
   const st = App.storage;
 
   try {
@@ -1503,3 +1560,597 @@ function applySettingsModal() {
   closeSettingsModal();
   setHint('Настройки сохранены', 1500);
 }
+
+// ============================================================
+//  v0.4.0 — Хранилище и API сцен (stage/<name>/stage.json и ассеты)
+// ============================================================
+
+const PREF_LAST_STAGE = 'anim_editor_last_stage';
+
+function buildDefaultStageClient(name) {
+  return {
+    version: 1,
+    name,
+    frame: { width: 1366, height: 768 },
+    background: {
+      color: '#243447',
+      file: '',
+      fit: 'stretch',
+      opacity: 1,
+      visible: true
+    },
+    items: []
+  };
+}
+
+async function ensureLocalStageRootHandle(createIfMissing) {
+  const st = App.storage;
+  if (st.stageHandle) return st.stageHandle;
+  if (st.rootHandle && st.rootHandle !== st.animHandle && typeof st.rootHandle.getDirectoryHandle === 'function') {
+    try {
+      st.stageHandle = await st.rootHandle.getDirectoryHandle('stage', { create: !!createIfMissing });
+      return st.stageHandle;
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function getLocalStageDirHandle(name, createIfMissing) {
+  const stageRoot = await ensureLocalStageRootHandle(createIfMissing);
+  if (!stageRoot) throw new Error('В выбранной локальной папке недоступна директория stage/');
+  return stageRoot.getDirectoryHandle(name, { create: !!createIfMissing });
+}
+
+async function fetchStages() {
+  const st = App.storage;
+
+  // 1) Локальная папка через File System Access API
+  if (st.mode === 'local-fs') {
+    const stageRoot = await ensureLocalStageRootHandle(false);
+    const items = [];
+    if (stageRoot) {
+      for await (const [entryName, entry] of stageRoot.entries()) {
+        if (entry.kind === 'directory' && !entryName.startsWith('.')) {
+          items.push(entryName);
+        }
+      }
+    }
+    for (const k of Object.keys(App.stage.customStages || {})) {
+      if (!items.includes(k)) items.push(k);
+    }
+    items.sort((a, b) => a.localeCompare(b));
+    return items;
+  }
+
+  // 2) Локальные файлы через webkitdirectory
+  if (st.mode === 'local-files' && st.memoryStages) {
+    const merged = new Set(Object.keys(st.memoryStages));
+    for (const k of Object.keys(App.stage.customStages || {})) merged.add(k);
+    return Array.from(merged).sort((a, b) => a.localeCompare(b));
+  }
+
+  // 3) Локальный сервер Node.js
+  if (st.mode === 'server') {
+    const r = await fetch('/api/stages');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  // 4) Статический манифест stage/index.json + локальные сцены сессии
+  let baseNames = [];
+  try {
+    const r = await fetch('stage/index.json');
+    if (r.ok) {
+      const j = await r.json();
+      baseNames = Object.keys((j && j.stages) || {});
+    }
+  } catch (_) {}
+
+  const merged = new Set();
+  for (const n of baseNames) {
+    if (!App.stage.deletedStages.has(n)) merged.add(n);
+  }
+  for (const n of Object.keys(App.stage.customStages || {})) {
+    merged.add(n);
+  }
+  return Array.from(merged).sort((a, b) => a.localeCompare(b));
+}
+
+async function fetchStageData(name) {
+  const st = App.storage;
+
+  // 1) Локальная папка (File System Access API)
+  if (st.mode === 'local-fs') {
+    if (App.stage.customStages && App.stage.customStages[name] && !(await ensureLocalStageRootHandle(false))) {
+      const entry = App.stage.customStages[name];
+      return {
+        name,
+        assets: Object.keys(entry.files || {}).sort((a, b) => a.localeCompare(b)),
+        stage: clone(entry.stage || buildDefaultStageClient(name))
+      };
+    }
+    const dir = await getLocalStageDirHandle(name, true);
+    const assets = [];
+    for await (const [fName, entry] of dir.entries()) {
+      if (entry.kind === 'file' && /\.(svg|png|jpe?g|webp|gif)$/i.test(fName)) {
+        assets.push(fName);
+      }
+    }
+    assets.sort((a, b) => a.localeCompare(b));
+
+    let stageObj = null;
+    try {
+      const fh = await dir.getFileHandle('stage.json');
+      const file = await fh.getFile();
+      stageObj = JSON.parse(await file.text());
+    } catch (_) {
+      stageObj = null;
+    }
+    if (!stageObj) {
+      stageObj = buildDefaultStageClient(name);
+      try {
+        const fh = await dir.getFileHandle('stage.json', { create: true });
+        const wr = await fh.createWritable();
+        await wr.write(JSON.stringify(stageObj, null, 2));
+        await wr.close();
+      } catch (_) {}
+    }
+    return { name, assets, stage: stageObj };
+  }
+
+  // 2) Память (webkitdirectory)
+  if (st.mode === 'local-files' && st.memoryStages && st.memoryStages[name]) {
+    const entry = st.memoryStages[name];
+    const assets = Object.keys(entry.files || {}).sort((a, b) => a.localeCompare(b));
+    if (!entry.stage) entry.stage = buildDefaultStageClient(name);
+    return { name, assets, stage: clone(entry.stage) };
+  }
+
+  // 3) Локальный сервер Node.js
+  if (st.mode === 'server') {
+    const r = await fetch('/api/stage/' + encodeURIComponent(name));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }
+
+  // 4) Кастомная сцена в памяти браузера (режим repo / без stageHandle)
+  if (App.stage.customStages && App.stage.customStages[name]) {
+    const entry = App.stage.customStages[name];
+    const assets = Object.keys(entry.files || {}).sort((a, b) => a.localeCompare(b));
+    const stageObj = entry.stage ? clone(entry.stage) : buildDefaultStageClient(name);
+    return { name, assets, stage: stageObj };
+  }
+
+  // 5) Статический репозиторий GitHub Pages
+  let assets = [];
+  try {
+    const idxRes = await fetch('stage/index.json');
+    if (idxRes.ok) {
+      const idxJson = await idxRes.json();
+      assets = (idxJson.stages && idxJson.stages[name]) || [];
+    }
+  } catch (_) {}
+
+  let stageObj = null;
+  try {
+    const sr = await fetch('stage/' + encodeURIComponent(name) + '/stage.json');
+    if (sr.ok) stageObj = await sr.json();
+  } catch (_) {}
+
+  if (!stageObj) stageObj = buildDefaultStageClient(name);
+  return { name, assets, stage: stageObj };
+}
+
+function fileBlobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ''));
+    fr.onerror = () => reject(new Error('Ошибка чтения файла'));
+    fr.readAsDataURL(blob);
+  });
+}
+
+function probeImageDimensions(dataUrlOrUrl) {
+  return new Promise((resolve) => {
+    if (typeof Image !== 'function') {
+      resolve({ width: 1366, height: 768 });
+      return;
+    }
+    const img = new Image();
+    img.onload = () => resolve({
+      width: img.naturalWidth || img.width || 1366,
+      height: img.naturalHeight || img.height || 768
+    });
+    img.onerror = () => resolve({ width: 1366, height: 768 });
+    img.src = dataUrlOrUrl;
+  });
+}
+
+function buildStageSvgAssetEntry(svgText, file) {
+  const root = parseSvgDocument(svgText, file);
+  const w = parseFloat(root.getAttribute('width')) || 100;
+  const h = parseFloat(root.getAttribute('height')) || 100;
+  return {
+    kind: 'svg',
+    parsed: { root, width: w, height: h },
+    unitToPx: root._unitToPx || 1
+  };
+}
+
+async function fetchStageAssetParsed(stageName, file) {
+  const key = stageName + '/' + file;
+  if (App.stage.assetCache[key]) return App.stage.assetCache[key];
+
+  const st = App.storage;
+  const isSvg = /\.svg$/i.test(file);
+
+  // Сначала проверяем загруженные в сессию кастомные файлы сцены
+  if (App.stage.customStages && App.stage.customStages[stageName] &&
+      App.stage.customStages[stageName].files && App.stage.customStages[stageName].files[file]) {
+    const memFile = App.stage.customStages[stageName].files[file];
+    if (memFile.kind === 'svg') {
+      const entry = buildStageSvgAssetEntry(memFile.text, file);
+      App.stage.assetCache[key] = entry;
+      return entry;
+    } else {
+      const dims = await probeImageDimensions(memFile.dataUrl);
+      const entry = { kind: 'raster', url: memFile.dataUrl, width: dims.width, height: dims.height };
+      App.stage.assetCache[key] = entry;
+      return entry;
+    }
+  }
+
+  if (st.mode === 'local-fs') {
+    const stageRoot = await ensureLocalStageRootHandle(false);
+    if (stageRoot) {
+      const dir = await stageRoot.getDirectoryHandle(stageName);
+      const fh = await dir.getFileHandle(file);
+      const f = await fh.getFile();
+      if (isSvg) {
+        const entry = buildStageSvgAssetEntry(await f.text(), file);
+        App.stage.assetCache[key] = entry;
+        return entry;
+      } else {
+        const dataUrl = await fileBlobToDataUrl(f);
+        const dims = await probeImageDimensions(dataUrl);
+        const entry = { kind: 'raster', url: dataUrl, width: dims.width, height: dims.height };
+        App.stage.assetCache[key] = entry;
+        return entry;
+      }
+    }
+  }
+
+  if (st.mode === 'local-files' && st.memoryStages && st.memoryStages[stageName] &&
+      st.memoryStages[stageName].files && st.memoryStages[stageName].files[file]) {
+    const mf = st.memoryStages[stageName].files[file];
+    if (mf.kind === 'svg') {
+      const entry = buildStageSvgAssetEntry(mf.text, file);
+      App.stage.assetCache[key] = entry;
+      return entry;
+    } else {
+      const dims = await probeImageDimensions(mf.dataUrl);
+      const entry = { kind: 'raster', url: mf.dataUrl, width: dims.width, height: dims.height };
+      App.stage.assetCache[key] = entry;
+      return entry;
+    }
+  }
+
+  const url = 'stage/' + encodeURIComponent(stageName) + '/' + encodeURIComponent(file);
+  if (isSvg) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' on ' + file);
+    const entry = buildStageSvgAssetEntry(await r.text(), file);
+    App.stage.assetCache[key] = entry;
+    return entry;
+  } else {
+    const dims = await probeImageDimensions(url);
+    const entry = { kind: 'raster', url, width: dims.width, height: dims.height };
+    App.stage.assetCache[key] = entry;
+    return entry;
+  }
+}
+
+async function saveStageBackend(stageName, stageObj) {
+  const jsonText = JSON.stringify(stageObj, null, 2);
+  const st = App.storage;
+
+  await ensureWritableFolderIfPending();
+
+  if (App.storage.mode === 'local-fs') {
+    const stageRoot = await ensureLocalStageRootHandle(true);
+    if (stageRoot) {
+      const dir = await stageRoot.getDirectoryHandle(stageName, { create: true });
+      const fh = await dir.getFileHandle('stage.json', { create: true });
+      const wr = await fh.createWritable();
+      await wr.write(jsonText);
+      await wr.close();
+      return { mode: 'local-fs' };
+    }
+  }
+
+  if (App.storage.mode === 'server') {
+    const r = await fetch('/api/stage/' + encodeURIComponent(stageName) + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: jsonText
+    });
+    if (!r.ok) {
+      let msg = 'HTTP ' + r.status;
+      try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (_) {}
+      throw new Error(msg);
+    }
+    return { mode: 'server' };
+  }
+
+  if (st.mode === 'local-files' && st.memoryStages && st.memoryStages[stageName]) {
+    st.memoryStages[stageName].stage = clone(stageObj);
+  }
+  if (!App.stage.customStages[stageName]) {
+    App.stage.customStages[stageName] = { files: {}, stage: clone(stageObj) };
+  } else {
+    App.stage.customStages[stageName].stage = clone(stageObj);
+  }
+
+  downloadJsonBlob(stageName + '.stage.json', jsonText);
+  return { mode: 'download' };
+}
+
+async function createStageBackend(rawName) {
+  await ensureWritableFolderIfPending();
+  const existing = await fetchStages();
+  const name = rawName ? sanitizeEntityName(rawName) : resolveAutoName(existing, 'NewStage');
+  if (!name) throw new Error('Некорректное имя сцены');
+  if (existing.includes(name)) throw new Error('Сцена с таким именем уже существует');
+
+  const stageObj = buildDefaultStageClient(name);
+
+  if (App.storage.mode === 'local-fs') {
+    const stageRoot = await ensureLocalStageRootHandle(true);
+    if (stageRoot) {
+      const dir = await stageRoot.getDirectoryHandle(name, { create: true });
+      const fh = await dir.getFileHandle('stage.json', { create: true });
+      const wr = await fh.createWritable();
+      await wr.write(JSON.stringify(stageObj, null, 2));
+      await wr.close();
+      return name;
+    }
+  }
+
+  if (App.storage.mode === 'server') {
+    const r = await fetch('/api/stages/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+    return j.name || name;
+  }
+
+  if (App.storage.mode === 'local-files' && App.storage.memoryStages) {
+    App.storage.memoryStages[name] = { files: {}, stage: stageObj };
+    return name;
+  }
+
+  App.stage.deletedStages.delete(name);
+  App.stage.customStages[name] = { files: {}, stage: stageObj };
+  return name;
+}
+
+async function cloneStageBackend(srcName) {
+  await ensureWritableFolderIfPending();
+  const existing = await fetchStages();
+  const dstName = resolveAutoName(existing, srcName + '_copy');
+
+  if (App.storage.mode === 'server') {
+    const r = await fetch('/api/stage/' + encodeURIComponent(srcName) + '/clone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newName: dstName })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+    return j.name || dstName;
+  }
+
+  const srcData = await fetchStageData(srcName);
+  const clonedStage = clone(srcData.stage || buildDefaultStageClient(dstName));
+  clonedStage.name = dstName;
+
+  if (App.storage.mode === 'local-fs') {
+    const stageRoot = await ensureLocalStageRootHandle(true);
+    if (stageRoot) {
+      const srcDir = await stageRoot.getDirectoryHandle(srcName);
+      const dstDir = await stageRoot.getDirectoryHandle(dstName, { create: true });
+      for await (const [fName, entry] of srcDir.entries()) {
+        if (entry.kind !== 'file' || fName === 'stage.json') continue;
+        const sf = await entry.getFile();
+        const buf = await sf.arrayBuffer();
+        const dfh = await dstDir.getFileHandle(fName, { create: true });
+        const wr = await dfh.createWritable();
+        await wr.write(buf);
+        await wr.close();
+      }
+      const sfh = await dstDir.getFileHandle('stage.json', { create: true });
+      const swr = await sfh.createWritable();
+      await swr.write(JSON.stringify(clonedStage, null, 2));
+      await swr.close();
+      return dstName;
+    }
+  }
+
+  if (App.storage.mode === 'local-files' && App.storage.memoryStages) {
+    const srcEntry = App.storage.memoryStages[srcName] || { files: {} };
+    App.storage.memoryStages[dstName] = { files: clone(srcEntry.files || {}), stage: clonedStage };
+    return dstName;
+  }
+
+  const customFiles = (App.stage.customStages[srcName] && clone(App.stage.customStages[srcName].files)) || {};
+  App.stage.deletedStages.delete(dstName);
+  App.stage.customStages[dstName] = { files: customFiles, stage: clonedStage };
+  return dstName;
+}
+
+async function renameStageBackend(oldName, rawNewName) {
+  await ensureWritableFolderIfPending();
+  const newName = sanitizeEntityName(rawNewName);
+  if (!newName) throw new Error('Имя сцены не может быть пустым');
+  if (newName === oldName) return oldName;
+
+  const existing = await fetchStages();
+  if (existing.includes(newName)) throw new Error('Сцена «' + newName + '» уже существует');
+
+  if (App.storage.mode === 'server') {
+    const r = await fetch('/api/stage/' + encodeURIComponent(oldName) + '/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newName })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  } else if (App.storage.mode === 'local-fs' && (await ensureLocalStageRootHandle(false))) {
+    const stageRoot = await ensureLocalStageRootHandle(false);
+    const srcDir = await stageRoot.getDirectoryHandle(oldName);
+    const dstDir = await stageRoot.getDirectoryHandle(newName, { create: true });
+    let stObj = null;
+    for await (const [fName, entry] of srcDir.entries()) {
+      if (entry.kind !== 'file') continue;
+      const sf = await entry.getFile();
+      if (fName === 'stage.json') {
+        try { stObj = JSON.parse(await sf.text()); } catch (_) {}
+        continue;
+      }
+      const buf = await sf.arrayBuffer();
+      const dfh = await dstDir.getFileHandle(fName, { create: true });
+      const wr = await dfh.createWritable();
+      await wr.write(buf);
+      await wr.close();
+    }
+    if (!stObj) stObj = buildDefaultStageClient(newName);
+    stObj.name = newName;
+    const sfh = await dstDir.getFileHandle('stage.json', { create: true });
+    const swr = await sfh.createWritable();
+    await swr.write(JSON.stringify(stObj, null, 2));
+    await swr.close();
+    await stageRoot.removeEntry(oldName, { recursive: true });
+  } else if (App.storage.mode === 'local-files' && App.storage.memoryStages) {
+    const entry = App.storage.memoryStages[oldName];
+    if (!entry) throw new Error('Сцена не найдена');
+    if (entry.stage) entry.stage.name = newName;
+    App.storage.memoryStages[newName] = entry;
+    delete App.storage.memoryStages[oldName];
+  } else {
+    const srcData = await fetchStageData(oldName);
+    srcData.stage.name = newName;
+    const prevCustom = App.stage.customStages[oldName];
+    App.stage.customStages[newName] = {
+      files: prevCustom ? prevCustom.files : {},
+      stage: srcData.stage
+    };
+    delete App.stage.customStages[oldName];
+    App.stage.deletedStages.add(oldName);
+    App.stage.deletedStages.delete(newName);
+  }
+
+  // Переносим закэшированные ассеты сцены на новое имя
+  const oldPrefix = oldName + '/';
+  for (const k of Object.keys(App.stage.assetCache)) {
+    if (k.indexOf(oldPrefix) === 0) {
+      const rest = k.slice(oldPrefix.length);
+      App.stage.assetCache[newName + '/' + rest] = App.stage.assetCache[k];
+      delete App.stage.assetCache[k];
+    }
+  }
+
+  if (App.stage.current === oldName) {
+    App.stage.current = newName;
+    if (App.stage.data) App.stage.data.name = newName;
+    if (els.stageName) els.stageName.value = newName;
+    setPref(PREF_LAST_STAGE, newName);
+  }
+  return newName;
+}
+
+async function deleteStageBackend(name) {
+  await ensureWritableFolderIfPending();
+
+  if (App.storage.mode === 'server') {
+    const r = await fetch('/api/stage/' + encodeURIComponent(name) + '/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+  } else if (App.storage.mode === 'local-fs' && (await ensureLocalStageRootHandle(false))) {
+    const stageRoot = await ensureLocalStageRootHandle(false);
+    await stageRoot.removeEntry(name, { recursive: true });
+  } else if (App.storage.mode === 'local-files' && App.storage.memoryStages) {
+    delete App.storage.memoryStages[name];
+  } else {
+    delete App.stage.customStages[name];
+    App.stage.deletedStages.add(name);
+  }
+}
+
+async function uploadStageAssetBackend(stageName, fileObj) {
+  if (!fileObj || !stageName) throw new Error('Файл не выбран');
+  const safeFileName = sanitizeEntityName(fileObj.name);
+  if (!/\.(svg|png|jpe?g|webp|gif)$/i.test(safeFileName)) {
+    throw new Error('Поддерживаются файлы SVG, PNG, JPG, WEBP, GIF');
+  }
+  const isSvg = /\.svg$/i.test(safeFileName);
+  const cacheKey = stageName + '/' + safeFileName;
+  delete App.stage.assetCache[cacheKey];
+
+  await ensureWritableFolderIfPending();
+
+  if (App.storage.mode === 'local-fs') {
+    const stageRoot = await ensureLocalStageRootHandle(true);
+    if (stageRoot) {
+      const dir = await stageRoot.getDirectoryHandle(stageName, { create: true });
+      const fh = await dir.getFileHandle(safeFileName, { create: true });
+      const wr = await fh.createWritable();
+      await wr.write(await fileObj.arrayBuffer());
+      await wr.close();
+      return safeFileName;
+    }
+  }
+
+  if (App.storage.mode === 'server') {
+    let payload;
+    if (isSvg) {
+      payload = { fileName: safeFileName, text: await fileObj.text() };
+    } else {
+      const dataUrl = await fileBlobToDataUrl(fileObj);
+      payload = { fileName: safeFileName, dataUrl };
+    }
+    const r = await fetch('/api/stage/' + encodeURIComponent(stageName) + '/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+    return j.fileName || safeFileName;
+  }
+
+  // Режим браузера (local-files / repo)
+  const fileEntry = isSvg
+    ? { kind: 'svg', text: await fileObj.text() }
+    : { kind: 'raster', dataUrl: await fileBlobToDataUrl(fileObj) };
+
+  if (App.storage.mode === 'local-files' && App.storage.memoryStages) {
+    if (!App.storage.memoryStages[stageName]) {
+      App.storage.memoryStages[stageName] = { files: {}, stage: App.stage.data || buildDefaultStageClient(stageName) };
+    }
+    App.storage.memoryStages[stageName].files[safeFileName] = fileEntry;
+  }
+
+  if (!App.stage.customStages[stageName]) {
+    App.stage.customStages[stageName] = { files: {}, stage: App.stage.data || buildDefaultStageClient(stageName) };
+  }
+  App.stage.customStages[stageName].files[safeFileName] = fileEntry;
+  return safeFileName;
+}
+
