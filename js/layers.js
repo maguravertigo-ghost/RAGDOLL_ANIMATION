@@ -350,6 +350,7 @@ function renamePart(oldId, newId) {
 }
 
 function refreshAfterStructureChange() {
+  markDirty();
   renderScene();
   renderOnionSkins();
   renderLayers();

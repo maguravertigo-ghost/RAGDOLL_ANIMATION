@@ -296,6 +296,29 @@ function updateMove(d, mx, my) {
     it.part.transform.position.y = ny;
     applyTransformAttr(it.part);
   }
+
+  // Привязка к опорной сетке сцены по Pivot Point выбранного слоя
+  if (app && app.grid && app.grid.snap && typeof app.snapClientToGrid === 'function' && d.part) {
+    const sz0 = getSize(d.part);
+    const pivClient = localToScreen(d.part, d.part.pivot.x * sz0.w, d.part.pivot.y * sz0.h);
+    const snapped = app.snapClientToGrid(pivClient.x, pivClient.y);
+    let dsx = snapped.x - pivClient.x;
+    let dsy = snapped.y - pivClient.y;
+    if (d.shift && d.lockAxis === 'x') dsy = 0;
+    if (d.shift && d.lockAxis === 'y') dsx = 0;
+
+    if (Math.abs(dsx) > 1e-7 || Math.abs(dsy) > 1e-7) {
+      for (const it of d.items) {
+        const p0 = screenToParent(it.part, pivClient.x, pivClient.y);
+        const p1 = screenToParent(it.part, pivClient.x + dsx, pivClient.y + dsy);
+        if (p0 && p1) {
+          it.part.transform.position.x += (p1.x - p0.x);
+          it.part.transform.position.y += (p1.y - p0.y);
+          applyTransformAttr(it.part);
+        }
+      }
+    }
+  }
 }
 
   // -----------------------------------------------------------
@@ -307,6 +330,11 @@ function updateMove(d, mx, my) {
     state.drag = { kind: 'pivot', part, startLocal: local };
   }
   function updatePivot(d, mx, my) {
+    if (app && app.grid && app.grid.snap && typeof app.snapClientToGrid === 'function') {
+      const sc = app.snapClientToGrid(mx, my);
+      mx = sc.x;
+      my = sc.y;
+    }
     const part = d.part;
     const { w, h } = getSize(part);
     const local = screenToLocal(part, mx, my);

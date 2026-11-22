@@ -356,7 +356,7 @@ function fitView() {
     Math.max(10, W - pad * 2) / bbox.width,
     Math.max(10, H - pad * 2) / bbox.height
   );
-  App.camera.zoom = clamp(z, 0.05, 20);
+  App.camera.zoom = clamp(z, 0.05, 60);
   App.camera.x = bbox.x + bbox.width / 2 + App.clipOffset.x;
   App.camera.y = bbox.y + bbox.height / 2 + App.clipOffset.y;
   applyCamera();
@@ -366,48 +366,155 @@ function zoomBy(factor) {
   const vp = els.viewport;
   const cx = vp.clientWidth / 2, cy = vp.clientHeight / 2;
   const before = screenToWorld(cx, cy);
-  App.camera.zoom = clamp(App.camera.zoom * factor, 0.05, 20);
+  App.camera.zoom = clamp(App.camera.zoom * factor, 0.05, 60);
   const after = screenToWorld(cx, cy);
   App.camera.x += before.x - after.x;
   App.camera.y += before.y - after.y;
   applyCamera();
 }
 
+function isViewportLightBg() {
+  const bg = (App.settings && App.settings.frame && App.settings.frame.background) || 'grid';
+  if (bg === 'grid' || bg === 'checkerboard') return false;
+  const rgb = hexToRgb(bg);
+  if (!rgb) return false;
+  const lum = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return lum > 0.55;
+}
+
 function rebuildGrid() {
+  if (!els.grid) return;
   els.grid.innerHTML = '';
+  const showGrid  = !!(App.grid && App.grid.showGrid);
+  const showCross = !!(App.grid && App.grid.showCrosshair);
+  if (!showGrid && !showCross) return;
+
   const vp = els.viewport;
   const W = vp.clientWidth, H = vp.clientHeight;
   if (!W || !H) return;
-  const z = App.camera.zoom;
-  const wl = screenToWorld(0, 0).x, wt = screenToWorld(0, 0).y;
-  const wr = screenToWorld(W, H).x, wb = screenToWorld(W, H).y;
-  const target = 80, raw = target / z;
-  const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
-  let step = nice[0];
-  for (const n of nice) {
-    if (n <= raw * 1.5) step = n;
-    else break;
+
+  const z = App.camera.zoom || 1;
+  const p0 = screenToWorld(0, 0);
+  const p1 = screenToWorld(W, H);
+  const wl = p0.x, wt = p0.y;
+  const wr = p1.x, wb = p1.y;
+  const light = isViewportLightBg();
+
+  // 1) Опорная волосяная сетка с фиксированным мировым размером ячейки (без скачков размера!)
+  if (showGrid) {
+    const baseStep = (App.grid && App.grid.step) || 4;
+    // Если при сильном отдалении ячейка на экране становится уже < 2px,
+    // кратно прореживаем суб-пиксельные линии только ради памяти/скорости, сохраняя узлы
+    let drawStep = baseStep;
+    while (drawStep * z < 2.0 && drawStep < 4096) {
+      drawStep *= 4;
+    }
+    const majorEvery = 4;
+    const majorStep = drawStep * majorEvery;
+
+    const ix0 = Math.floor(wl / drawStep);
+    const ix1 = Math.ceil(wr / drawStep);
+    const iy0 = Math.floor(wt / drawStep);
+    const iy1 = Math.ceil(wb / drawStep);
+
+    // Защита от переполнения на сверхбольших экранах
+    const totalCols = ix1 - ix0;
+    const totalRows = iy1 - iy0;
+    if (totalCols <= 1500 && totalRows <= 1500) {
+      const minorSegs = [];
+      const majorSegs = [];
+
+      for (let i = ix0; i <= ix1; i++) {
+        if (i === 0 && showCross) continue;
+        const x = i * drawStep;
+        const cmd = 'M' + x + ' ' + wt + 'V' + wb;
+        if (i % majorEvery === 0) majorSegs.push(cmd);
+        else minorSegs.push(cmd);
+      }
+
+      for (let j = iy0; j <= iy1; j++) {
+        if (j === 0 && showCross) continue;
+        const y = j * drawStep;
+        const cmd = 'M' + wl + ' ' + y + 'H' + wr;
+        if (j % majorEvery === 0) majorSegs.push(cmd);
+        else minorSegs.push(cmd);
+      }
+
+      if (minorSegs.length) {
+        const pathMinor = document.createElementNS(SVG_NS, 'path');
+        pathMinor.setAttribute('d', minorSegs.join(''));
+        pathMinor.setAttribute('class', 'grid-path-minor');
+        pathMinor.setAttribute('vector-effect', 'non-scaling-stroke');
+        if (light) pathMinor.style.stroke = 'rgba(0, 0, 0, 0.08)';
+        els.grid.appendChild(pathMinor);
+      }
+
+      if (majorSegs.length) {
+        const pathMajor = document.createElementNS(SVG_NS, 'path');
+        pathMajor.setAttribute('d', majorSegs.join(''));
+        pathMajor.setAttribute('class', 'grid-path-major');
+        pathMajor.setAttribute('vector-effect', 'non-scaling-stroke');
+        if (light) pathMajor.style.stroke = 'rgba(0, 0, 0, 0.16)';
+        els.grid.appendChild(pathMajor);
+      }
+    }
   }
-  const x0 = Math.floor(wl / step) * step, x1 = Math.ceil(wr / step) * step;
-  const y0 = Math.floor(wt / step) * step, y1 = Math.ceil(wb / step) * step;
-  const frag = document.createDocumentFragment();
-  for (let x = x0; x <= x1 + 1e-6; x += step) {
-    const l = document.createElementNS(SVG_NS, 'line');
-    l.setAttribute('x1', x); l.setAttribute('y1', y0);
-    l.setAttribute('x2', x); l.setAttribute('y2', y1);
-    l.setAttribute('class', 'grid-line' + (Math.abs(x) < 1e-6 ? ' grid-axis' : ''));
-    l.setAttribute('vector-effect', 'non-scaling-stroke');
-    frag.appendChild(l);
+
+  // 2) Центральный крест сцены (оси X=0, Y=0 и точка центра (0, 0))
+  if (showCross) {
+    const crossD = [];
+    if (wt <= 0 && wb >= 0) crossD.push('M' + wl + ' 0H' + wr);
+    if (wl <= 0 && wr >= 0) crossD.push('M0 ' + wt + 'V' + wb);
+    if (crossD.length) {
+      const crossPath = document.createElementNS(SVG_NS, 'path');
+      crossPath.setAttribute('d', crossD.join(''));
+      crossPath.setAttribute('class', 'grid-crosshair-line');
+      crossPath.setAttribute('vector-effect', 'non-scaling-stroke');
+      if (light) crossPath.style.stroke = 'rgba(32, 108, 185, 0.82)';
+      els.grid.appendChild(crossPath);
+    }
+
+    const r = 4.5 / z;
+    if (wl <= r && wr >= -r && wt <= r && wb >= -r) {
+      const originCircle = document.createElementNS(SVG_NS, 'circle');
+      originCircle.setAttribute('cx', '0');
+      originCircle.setAttribute('cy', '0');
+      originCircle.setAttribute('r', String(r));
+      originCircle.setAttribute('class', 'grid-crosshair-origin');
+      originCircle.setAttribute('vector-effect', 'non-scaling-stroke');
+      if (light) {
+        originCircle.style.stroke = 'rgba(24, 96, 172, 0.92)';
+        originCircle.style.fill = 'rgba(32, 108, 185, 0.15)';
+      }
+      els.grid.appendChild(originCircle);
+    }
   }
-  for (let y = y0; y <= y1 + 1e-6; y += step) {
-    const l = document.createElementNS(SVG_NS, 'line');
-    l.setAttribute('x1', x0); l.setAttribute('y1', y);
-    l.setAttribute('x2', x1); l.setAttribute('y2', y);
-    l.setAttribute('class', 'grid-line' + (Math.abs(y) < 1e-6 ? ' grid-axis' : ''));
-    l.setAttribute('vector-effect', 'non-scaling-stroke');
-    frag.appendChild(l);
-  }
-  els.grid.appendChild(frag);
+}
+
+function updateGridButtonsUI() {
+  if (els.btnCrosshair) els.btnCrosshair.classList.toggle('active', !!App.grid.showCrosshair);
+  if (els.btnGrid)      els.btnGrid.classList.toggle('active', !!App.grid.showGrid);
+  if (els.btnSnap)      els.btnSnap.classList.toggle('active', !!App.grid.snap);
+}
+
+function toggleCrosshair() {
+  App.grid.showCrosshair = !App.grid.showCrosshair;
+  updateGridButtonsUI();
+  rebuildGrid();
+  setHint('Крест сцены: ' + (App.grid.showCrosshair ? 'ВКЛ' : 'ВЫКЛ'), 1300);
+}
+
+function toggleSceneGrid() {
+  App.grid.showGrid = !App.grid.showGrid;
+  updateGridButtonsUI();
+  rebuildGrid();
+  setHint('Сетка сцены: ' + (App.grid.showGrid ? 'ВКЛ' : 'ВЫКЛ'), 1300);
+}
+
+function toggleGridSnap() {
+  App.grid.snap = !App.grid.snap;
+  updateGridButtonsUI();
+  setHint('Привязка к сетке (Pivot): ' + (App.grid.snap ? 'ВКЛ' : 'ВЫКЛ'), 1500);
 }
 
 // -------- фон окна просмотра --------
@@ -531,12 +638,16 @@ function renderBgPresets() {
       if (p.checker) {
         App.settings.frame.background = 'checkerboard';
         applyBackgroundToViewport();
+        rebuildGrid();
+        markDirty();
         closeBgModal();
       } else if (p.custom) {
         // остаёмся в палитре для выбора кастомного цвета
       } else {
         App.settings.frame.background = p.isGrid ? 'grid' : p.color;
         applyBackgroundToViewport();
+        rebuildGrid();
+        markDirty();
         closeBgModal();
       }
     };
@@ -594,6 +705,8 @@ function setupBgPicker() {
   els.bgOk.addEventListener('click', () => {
     App.settings.frame.background = BG.hex;
     applyBackgroundToViewport();
+    rebuildGrid();
+    markDirty();
     closeBgModal();
   });
   els.bgCancel.addEventListener('click', closeBgModal);
@@ -608,13 +721,12 @@ function setupBgPicker() {
 function setupSceneInput() {
   const vp = els.viewport;
   vp.addEventListener('wheel', (e) => {
-    if (!e.ctrlKey) return;
     e.preventDefault();
     const rect = vp.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
     const before = screenToWorld(sx, sy);
     const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    App.camera.zoom = clamp(App.camera.zoom * factor, 0.05, 20);
+    App.camera.zoom = clamp(App.camera.zoom * factor, 0.05, 60);
     const after = screenToWorld(sx, sy);
     App.camera.x += before.x - after.x;
     App.camera.y += before.y - after.y;

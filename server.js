@@ -49,7 +49,10 @@ async function findFreePort() {
 }
 
 function safeName(name) {
-  return path.basename(String(name || '')).replace(/[^\w\-. ]+/g, '_');
+  const base = path.basename(String(name || '').trim())
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_');
+  if (!base || base === '.' || base === '..') return '';
+  return base;
 }
 
 // строит базовый settings.json по списку svg-файлов в папке объекта
@@ -227,6 +230,152 @@ function apiObjectSave(req, res, name) {
   });
 }
 
+function listAnimObjectNames() {
+  if (!fs.existsSync(ANIM_DIR)) return [];
+  return fs.readdirSync(ANIM_DIR, { withFileTypes: true })
+    .filter(function (d) { return d.isDirectory() && !d.name.startsWith('.'); })
+    .map(function (d) { return d.name; });
+}
+
+function resolveAutoNameServer(prefix) {
+  const used = new Set(listAnimObjectNames());
+  let idx = 0;
+  while (used.has(prefix + idx)) idx++;
+  return prefix + idx;
+}
+
+function resolveCloneNameServer(sourceName) {
+  const used = new Set(listAnimObjectNames());
+  const stem = String(sourceName || 'object').replace(/_clone_\d+$/, '');
+  let idx = 0;
+  while (used.has(stem + '_clone_' + idx)) idx++;
+  return stem + '_clone_' + idx;
+}
+
+function apiObjectCreate(req, res) {
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const candidate = data.name ? safeName(data.name) : resolveAutoNameServer('untitled_');
+    if (!candidate) return sendJson(res, 400, { error: 'Некорректное имя объекта' });
+
+    const dir = path.join(ANIM_DIR, candidate);
+    if (fs.existsSync(dir)) {
+      return sendJson(res, 409, { error: 'Объект «' + candidate + '» уже существует' });
+    }
+
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const settings = buildDefaultSettings(candidate, []);
+      fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(settings, null, 2), 'utf8');
+      sendJson(res, 200, { ok: true, name: candidate });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiObjectClone(req, res, srcName) {
+  const safeSrc = safeName(srcName);
+  if (!safeSrc) return sendJson(res, 400, { error: 'Некорректное имя исходного объекта' });
+  const srcDir = path.join(ANIM_DIR, safeSrc);
+  if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Исходный объект не найден' });
+  }
+
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const safeDst = data.newName ? safeName(data.newName) : resolveCloneNameServer(safeSrc);
+    if (!safeDst) return sendJson(res, 400, { error: 'Некорректное имя клона' });
+    const dstDir = path.join(ANIM_DIR, safeDst);
+    if (fs.existsSync(dstDir)) {
+      return sendJson(res, 409, { error: 'Объект «' + safeDst + '» уже существует' });
+    }
+
+    try {
+      fs.mkdirSync(dstDir, { recursive: true });
+      const files = fs.readdirSync(srcDir, { withFileTypes: true });
+      for (const f of files) {
+        if (!f.isFile()) continue;
+        fs.copyFileSync(path.join(srcDir, f.name), path.join(dstDir, f.name));
+      }
+      const settingsPath = path.join(dstDir, 'settings.json');
+      if (fs.existsSync(settingsPath)) {
+        try {
+          const stObj = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+          stObj.name = safeDst;
+          fs.writeFileSync(settingsPath, JSON.stringify(stObj, null, 2), 'utf8');
+        } catch (_) {}
+      }
+      sendJson(res, 200, { ok: true, name: safeDst });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiObjectRename(req, res, oldName) {
+  const safeOld = safeName(oldName);
+  if (!safeOld) return sendJson(res, 400, { error: 'Некорректное имя объекта' });
+  const oldDir = path.join(ANIM_DIR, safeOld);
+  if (!fs.existsSync(oldDir) || !fs.statSync(oldDir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Объект не найден' });
+  }
+
+  readBody(req, function (err, body) {
+    if (err) return sendJson(res, 400, { error: err.message });
+    let data;
+    try { data = JSON.parse(body || '{}'); }
+    catch (e) { return sendJson(res, 400, { error: 'Невалидный JSON' }); }
+
+    const safeNew = safeName(data.newName);
+    if (!safeNew) return sendJson(res, 400, { error: 'Некорректное новое имя' });
+    if (safeNew === safeOld) return sendJson(res, 200, { ok: true, name: safeNew });
+
+    const newDir = path.join(ANIM_DIR, safeNew);
+    if (fs.existsSync(newDir)) {
+      return sendJson(res, 409, { error: 'Объект «' + safeNew + '» уже существует' });
+    }
+
+    try {
+      fs.renameSync(oldDir, newDir);
+      const settingsPath = path.join(newDir, 'settings.json');
+      if (fs.existsSync(settingsPath)) {
+        try {
+          const stObj = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+          stObj.name = safeNew;
+          fs.writeFileSync(settingsPath, JSON.stringify(stObj, null, 2), 'utf8');
+        } catch (_) {}
+      }
+      sendJson(res, 200, { ok: true, name: safeNew });
+    } catch (e) {
+      sendJson(res, 500, { error: e.message });
+    }
+  });
+}
+
+function apiObjectDelete(req, res, name) {
+  const safe = safeName(name);
+  if (!safe) return sendJson(res, 400, { error: 'Некорректное имя объекта' });
+  const dir = path.join(ANIM_DIR, safe);
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    return sendJson(res, 404, { error: 'Объект не найден' });
+  }
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+    sendJson(res, 200, { ok: true });
+  } catch (e) {
+    sendJson(res, 500, { error: e.message });
+  }
+}
+
 const PRESETS_FILE = path.join(ROOT, 'presets.json');
 
 function apiPresetsGet(req, res) {
@@ -271,6 +420,10 @@ function handle(req, res) {
     return apiObjects(req, res);
   }
 
+  if (pathname === '/api/objects/create' && method === 'POST') {
+    return apiObjectCreate(req, res);
+  }
+
   if (pathname === '/api/presets' && method === 'GET') {
     return apiPresetsGet(req, res);
   }
@@ -287,6 +440,21 @@ function handle(req, res) {
   m = pathname.match(/^\/api\/object\/([^\/]+)\/save$/);
   if (m && method === 'POST') {
     return apiObjectSave(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/object\/([^\/]+)\/clone$/);
+  if (m && method === 'POST') {
+    return apiObjectClone(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/object\/([^\/]+)\/rename$/);
+  if (m && method === 'POST') {
+    return apiObjectRename(req, res, m[1]);
+  }
+
+  m = pathname.match(/^\/api\/object\/([^\/]+)\/delete$/);
+  if (m && method === 'POST') {
+    return apiObjectDelete(req, res, m[1]);
   }
 
   if (pathname.indexOf('/api/') === 0) {

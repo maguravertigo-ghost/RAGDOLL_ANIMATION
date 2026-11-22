@@ -4,6 +4,7 @@
 //  app.js — глобальное состояние App, кэш DOM, математика матриц и модалки
 // ============================================================
 
+const APP_VERSION = 'v0.3.0';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const $  = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -17,6 +18,7 @@ const TL = {
 const ANIM_PROPS = ['position', 'rotation', 'scale', 'skew', 'visible'];
 
 const App = {
+  version:      APP_VERSION,
   current:      null,
   settings:     null,
   svgCache:     {},
@@ -24,6 +26,14 @@ const App = {
   selectedIds:  new Set(),
   camera:       { x: 0, y: 0, zoom: 1 },
   clipOffset:   { x: 0, y: 0 },
+  grid: {
+    showCrosshair: true,
+    showGrid:      true,
+    snap:          false,   // по умолчанию выключена
+    step:          4,       // фиксированный мировой размер ячейки сетки
+  },
+  dirty:        false,
+  _suppressDirty: false,
   spaceDown:    false,
   panning:      false,
   panStart:     null,
@@ -32,6 +42,7 @@ const App = {
   onPartChanged: null,
   syncProperties: null,
   _dragLayerId: null,
+  _objSelectedName: null,
   _animSelectedName: null,
   _propsCollapsed: false,
   _timelineCollapsed: false,
@@ -53,6 +64,23 @@ const App = {
       cur = cur.parent ? byId[cur.parent] : null;
     }
     return true;
+  },
+  snapClientToGrid(clientX, clientY) {
+    if (!this.grid.snap || !els.viewport) return { x: clientX, y: clientY };
+    const rect = els.viewport.getBoundingClientRect();
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const z = this.camera.zoom || 1;
+    const step = this.grid.step || 4;
+    const wx = (sx - cx) / z + this.camera.x;
+    const wy = (sy - cy) / z + this.camera.y;
+    const wxSnap = Math.round(wx / step) * step;
+    const wySnap = Math.round(wy / step) * step;
+    const sxSnap = (wxSnap - this.camera.x) * z + cx;
+    const sySnap = (wySnap - this.camera.y) * z + cy;
+    return { x: sxSnap + rect.left, y: sySnap + rect.top };
   },
   anim: {
     time: 0,
@@ -79,6 +107,8 @@ const App = {
     singleObjHandle: null,
     pendingHandle: null,  // сохранённый дескриптор, ожидающий 1 клика на разрешение
     memoryObjects: null,  // фоллбэк для webkitdirectory: { [objName]: { svgs: {file: text}, settings: obj } }
+    customObjects: {},    // объекты, созданные/клонированные в браузере в режиме repo
+    deletedObjects: new Set(),
     autoOpenLast: true,
   },
 };
@@ -86,15 +116,20 @@ const App = {
 const els = {};
 function cacheEls() {
   // Header
-  els.btnObjects        = $('#btn-objects');
-  els.objName           = $('#obj-name');
-  els.btnAnim           = $('#btn-anim');
-  els.animName          = $('#anim-name');
-  els.btnStorageStatus  = $('#btn-storage-status');
-  els.storageDot        = $('#storage-dot');
-  els.storageLabel      = $('#storage-label');
-  els.btnSave           = $('#btn-save');
-  els.btnSettings       = $('#btn-settings');
+  els.appVersion         = $('#app-version');
+  els.btnObjects         = $('#btn-objects');
+  els.objNameGroup       = $('#obj-name-group');
+  els.objName            = $('#obj-name');
+  els.btnObjInlineRename = $('#btn-obj-inline-rename');
+  els.btnAnim            = $('#btn-anim');
+  els.animNameGroup      = $('#anim-name-group');
+  els.animName           = $('#anim-name');
+  els.btnAnimInlineRename = $('#btn-anim-inline-rename');
+  els.btnStorageStatus   = $('#btn-storage-status');
+  els.storageDot         = $('#storage-dot');
+  els.storageLabel       = $('#storage-label');
+  els.btnSave            = $('#btn-save');
+  els.btnSettings        = $('#btn-settings');
 
   // Viewport & SVG
   els.viewport          = $('#viewport');
@@ -107,6 +142,9 @@ function cacheEls() {
 
   // Tools row
   els.zoomLabel         = $('#zoom-label');
+  els.btnCrosshair      = $('#btn-crosshair');
+  els.btnGrid           = $('#btn-grid');
+  els.btnSnap           = $('#btn-snap');
   els.btnRealtime       = $('#btn-realtime');
   els.btnResetAnim      = $('#btn-reset-anim');
   els.btnPresets        = $('#btn-presets');
@@ -165,6 +203,11 @@ function cacheEls() {
   els.objectsBtnReconnect = $('#objects-btn-reconnect');
   els.objectsBtnPick     = $('#objects-btn-pick');
   els.objectsList        = $('#objects-list');
+  els.objAdd             = $('#obj-add');
+  els.objClone           = $('#obj-clone');
+  els.objRename          = $('#obj-rename');
+  els.objDelete          = $('#obj-delete');
+  els.objOpen            = $('#obj-open');
   els.modalObjectsClose  = $('#modal-objects-close');
 
   els.modalSettings      = $('#modal-settings');
@@ -195,6 +238,7 @@ function cacheEls() {
   els.animsList         = $('#anims-list');
   els.modalAnimsClose   = $('#modal-anims-close');
   els.animAdd           = $('#anim-add');
+  els.animClone         = $('#anim-clone');
   els.animRename        = $('#anim-rename');
   els.animDelete        = $('#anim-delete');
   els.animOk            = $('#anim-ok');
@@ -239,7 +283,14 @@ function cacheEls() {
   els.presetImportBtn     = $('#preset-import-btn');
   els.presetImportInput   = $('#preset-import-input');
 
+  els.modalUnsaved        = $('#modal-unsaved');
+  els.unsavedText         = $('#unsaved-text');
+  els.unsavedDiscard      = $('#unsaved-discard');
+  els.unsavedStay         = $('#unsaved-stay');
+  els.unsavedSave         = $('#unsaved-save');
+
   els.hint              = $('#hint');
+  if (els.appVersion) els.appVersion.textContent = APP_VERSION;
 }
 App.els = els;
 
@@ -460,3 +511,98 @@ function confirmDialog(title, text, onConfirm) {
   document.addEventListener('keydown', onKey);
   els.modalConfirm.addEventListener('mousedown', onBg);
 }
+
+// -------- отслеживание несохранённых изменений и авто-именование --------
+
+function updateSaveButtonUI() {
+  if (!els.btnSave) return;
+  els.btnSave.classList.toggle('dirty', !!App.dirty);
+  els.btnSave.title = App.dirty
+    ? 'Есть несохранённые изменения! Сохранить (Ctrl+S)'
+    : 'Сохранить (Ctrl+S)';
+}
+
+function markDirty() {
+  if (!App.settings || App._suppressDirty) return;
+  if (!App.dirty) {
+    App.dirty = true;
+    updateSaveButtonUI();
+  }
+}
+
+function clearDirty() {
+  App.dirty = false;
+  updateSaveButtonUI();
+}
+
+function guardUnsavedChanges(proceedFn) {
+  if (!App.dirty || !App.current || !els.modalUnsaved) {
+    proceedFn();
+    return;
+  }
+  els.unsavedText.textContent =
+    'В объекте «' + App.current + '» есть несохранённые изменения. ' +
+    'Сохранить их перед переключением на другой объект?';
+  els.modalUnsaved.hidden = false;
+  setTimeout(() => { if (els.unsavedSave) els.unsavedSave.focus(); }, 0);
+
+  function cleanup() {
+    els.modalUnsaved.hidden = true;
+    els.unsavedSave.removeEventListener('click', onSave);
+    els.unsavedStay.removeEventListener('click', onStay);
+    els.unsavedDiscard.removeEventListener('click', onDiscard);
+    document.removeEventListener('keydown', onKey);
+    els.modalUnsaved.removeEventListener('mousedown', onBg);
+  }
+  async function onSave() {
+    cleanup();
+    if (typeof saveObject === 'function') {
+      const ok = await saveObject();
+      if (ok && !App.dirty) proceedFn();
+    }
+  }
+  function onStay() {
+    cleanup();
+    if (els.modalObjects && !els.modalObjects.hidden && typeof closeObjectsModal === 'function') {
+      closeObjectsModal();
+    }
+  }
+  function onDiscard() {
+    cleanup();
+    clearDirty();
+    proceedFn();
+  }
+  function onKey(e) {
+    if (els.modalUnsaved.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); onStay(); }
+  }
+  function onBg(e) { if (e.target === els.modalUnsaved) onStay(); }
+
+  els.unsavedSave.addEventListener('click', onSave);
+  els.unsavedStay.addEventListener('click', onStay);
+  els.unsavedDiscard.addEventListener('click', onDiscard);
+  document.addEventListener('keydown', onKey);
+  els.modalUnsaved.addEventListener('mousedown', onBg);
+}
+
+function sanitizeEntityName(raw) {
+  const s = String(raw || '').trim().replace(/[<>:"/\\|?*\x00-\x1f]+/g, '');
+  if (!s || s === '.' || s === '..') return '';
+  return s;
+}
+
+function resolveAutoName(existingNames, prefix) {
+  const used = new Set(existingNames || []);
+  let idx = 0;
+  while (used.has(prefix + idx)) idx++;
+  return prefix + idx;
+}
+
+function resolveCloneName(existingNames, sourceName) {
+  const used = new Set(existingNames || []);
+  const stem = String(sourceName || 'item').replace(/_clone_\d+$/, '');
+  let idx = 0;
+  while (used.has(stem + '_clone_' + idx)) idx++;
+  return stem + '_clone_' + idx;
+}
+
