@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <title>Animation Editor</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body data-editor-mode="object">
   <header>
     <span class="brand">Animation Editor</span>
-    <span class="app-version" id="app-version">v0.5.0</span>
+    <span class="app-version" id="app-version">v0.6.0</span>
 
     <button class="mode-switch-btn mode-object" id="btn-editor-mode" type="button" title="Переключить режим: Анимация объектов (малиновый) / Редактор сцены (зелёный)">
       <span class="material-icons" id="editor-mode-icon">animation</span>
@@ -91,6 +91,7 @@
           <canvas id="stage-ruler-v-canvas"></canvas>
           <div class="stage-ruler-hair stage-ruler-hair-y" id="stage-ruler-hair-y"></div>
         </div>
+        <div class="stage-preview-fps-hud" id="stage-preview-fps-hud" hidden></div>
       </div>
 
 	<div class="tools-row">
@@ -116,13 +117,16 @@
 		  <line x1="2.5" y1="11.2" x2="15.5" y2="11.2"></line>
 		</svg>
 	  </button>
-	  <button class="icon-btn" id="btn-snap" title="Привязка к сетке (по Pivot Point): вкл/выкл">
+	  <button class="icon-btn" id="btn-snap" title="Привязка к сетке (по Pivot Point и для направляющих): вкл/выкл">
 		<svg class="svg-icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 		  <path d="M5 3.5v4.5a4 4 0 0 0 8 0V3.5"></path>
 		  <line x1="3.8" y1="3.5" x2="6.2" y2="3.5"></line>
 		  <line x1="11.8" y1="3.5" x2="14.2" y2="3.5"></line>
 		  <circle cx="9" cy="14.5" r="1.2" fill="currentColor" stroke="none"></circle>
 		</svg>
+	  </button>
+	  <button class="icon-btn" id="btn-grid-settings" title="Настройка сетки макета (шаг, крупная клетка, начало координат, цвет, прозрачность)">
+		<span class="material-icons">tune</span>
 	  </button>
 
 	  <span class="sep obj-mode-only"></span>
@@ -163,6 +167,9 @@
 		  <rect x="6" y="4.5" width="8.5" height="6.5" rx="1"></rect>
 		  <circle cx="4" cy="13" r="1.8" fill="currentColor" stroke="none"></circle>
 		</svg>
+	  </button>
+	  <button class="icon-btn stage-mode-only" id="btn-stage-guides-menu" title="Меню направляющих: цвет, прозрачность, быстрая разметка, удаление и очистка" hidden>
+		<span class="material-icons">rule</span>
 	  </button>
 	  <button class="icon-btn stage-mode-only" id="btn-stage-add-obj" title="Добавить объект или декор в центр сцены" hidden>
 		<span class="material-icons">add_box</span>
@@ -273,6 +280,10 @@
 			<span class="material-icons" id="stage-play-icon">play_arrow</span>
 			<span id="stage-play-label">Предпросмотр (ESC — выход)</span>
 		  </button>
+		  <label class="stage-fps-check" title="Показывать реальный FPS и нагрузку кадра (мс) в полноэкранном предпросмотре">
+			<input type="checkbox" id="stage-preview-fps-flag" checked>
+			<span>FPS</span>
+		  </label>
 		  <label class="fps-wrap" title="Глобальная скорость предпросмотра сцены (10%..200%)">
 			<input type="range" id="stage-speed-slider" min="10" max="200" step="5" value="100">
 			<span class="fps-value" id="stage-speed-value">1.0×</span>
@@ -682,17 +693,20 @@
       </div>
     </div>
   </div>
+  <div class="floating-popover" id="grid-settings-popover" hidden></div>
+  <div class="floating-popover" id="guides-settings-popover" hidden></div>
+  <div class="stage-context-menu" id="stage-context-menu" hidden></div>
   <div class="hint" id="hint"></div>
 
-  <script src="js/gizmo.js?v=5"></script>
-  <script src="js/app.js?v=5"></script>
-  <script src="js/api.js?v=5"></script>
-  <script src="js/scene.js?v=5"></script>
-  <script src="js/layers.js?v=5"></script>
-  <script src="js/animation.js?v=5"></script>
-  <script src="js/timeline.js?v=5"></script>
-  <script src="js/presets.js?v=5"></script>
-  <script src="js/stage.js?v=5"></script>
-  <script src="js/main.js?v=5"></script>
+  <script src="js/gizmo.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
+  <script src="js/api.js?v=6"></script>
+  <script src="js/scene.js?v=6"></script>
+  <script src="js/layers.js?v=6"></script>
+  <script src="js/animation.js?v=6"></script>
+  <script src="js/timeline.js?v=6"></script>
+  <script src="js/presets.js?v=6"></script>
+  <script src="js/stage.js?v=6"></script>
+  <script src="js/main.js?v=6"></script>
 </body>
 </html>

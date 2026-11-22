@@ -392,6 +392,13 @@ function isViewportLightBg() {
   return lum > 0.55;
 }
 
+function gridStrokeColor(hex, alpha, fallback) {
+  const rgb = hexToRgb(hex || '#9fb0c8');
+  if (!rgb) return fallback;
+  const a = clamp(Number(alpha) || 0.14, 0.02, 0.95);
+  return 'rgba(' + rgb.r + ', ' + rgb.g + ', ' + rgb.b + ', ' + a.toFixed(3) + ')';
+}
+
 function rebuildGrid() {
   if (!els.grid) return;
   els.grid.innerHTML = '';
@@ -409,53 +416,59 @@ function rebuildGrid() {
   const wl = p0.x, wt = p0.y;
   const wr = p1.x, wb = p1.y;
   const light = isViewportLightBg();
+  const origin = App.getGridOrigin ? App.getGridOrigin() : { x: 0, y: 0 };
 
-  // 1) Опорная волосяная сетка с фиксированным мировым размером ячейки (без скачков размера!)
+  // 1) Опорная волосяная сетка с настраиваемым шагом, крупной клеткой, цветом и началом координат
   if (showGrid) {
-    const baseStep = (App.grid && App.grid.step) || 4;
-    // Если при сильном отдалении ячейка на экране становится уже < 2px,
-    // кратно прореживаем суб-пиксельные линии только ради памяти/скорости, сохраняя узлы
+    const baseStep = Math.max(1, Number(App.grid && App.grid.step) || 4);
     let drawStep = baseStep;
     while (drawStep * z < 2.0 && drawStep < 4096) {
       drawStep *= 4;
     }
-    const majorEvery = 4;
-    const majorStep = drawStep * majorEvery;
+    const rawMajor = (App.grid && App.grid.majorEvery !== undefined) ? Number(App.grid.majorEvery) : 5;
+    const majorEvery = rawMajor > 0 ? Math.max(2, Math.round(rawMajor)) : 0;
 
-    const ix0 = Math.floor(wl / drawStep);
-    const ix1 = Math.ceil(wr / drawStep);
-    const iy0 = Math.floor(wt / drawStep);
-    const iy1 = Math.ceil(wb / drawStep);
+    const ix0 = Math.floor((wl - origin.x) / drawStep);
+    const ix1 = Math.ceil((wr - origin.x) / drawStep);
+    const iy0 = Math.floor((wt - origin.y) / drawStep);
+    const iy1 = Math.ceil((wb - origin.y) / drawStep);
 
-    // Защита от переполнения на сверхбольших экранах
     const totalCols = ix1 - ix0;
     const totalRows = iy1 - iy0;
-    if (totalCols <= 1500 && totalRows <= 1500) {
+    if (totalCols <= 1600 && totalRows <= 1600) {
       const minorSegs = [];
       const majorSegs = [];
 
       for (let i = ix0; i <= ix1; i++) {
-        if (i === 0 && showCross) continue;
-        const x = i * drawStep;
+        const x = origin.x + i * drawStep;
+        if (showCross && Math.abs(x) < 1e-6) continue;
         const cmd = 'M' + x + ' ' + wt + 'V' + wb;
-        if (i % majorEvery === 0) majorSegs.push(cmd);
+        if (majorEvery > 0 && i % majorEvery === 0) majorSegs.push(cmd);
         else minorSegs.push(cmd);
       }
 
       for (let j = iy0; j <= iy1; j++) {
-        if (j === 0 && showCross) continue;
-        const y = j * drawStep;
+        const y = origin.y + j * drawStep;
+        if (showCross && Math.abs(y) < 1e-6) continue;
         const cmd = 'M' + wl + ' ' + y + 'H' + wr;
-        if (j % majorEvery === 0) majorSegs.push(cmd);
+        if (majorEvery > 0 && j % majorEvery === 0) majorSegs.push(cmd);
         else minorSegs.push(cmd);
       }
+
+      const baseOp = clamp(Number(App.grid && App.grid.opacity) || 0.14, 0.03, 0.75);
+      const minorStroke = light
+        ? 'rgba(0, 0, 0, 0.08)'
+        : gridStrokeColor(App.grid && App.grid.color, baseOp, 'rgba(255,255,255,0.08)');
+      const majorStroke = light
+        ? 'rgba(0, 0, 0, 0.17)'
+        : gridStrokeColor(App.grid && App.grid.color, Math.min(0.9, baseOp * 1.95), 'rgba(255,255,255,0.16)');
 
       if (minorSegs.length) {
         const pathMinor = document.createElementNS(SVG_NS, 'path');
         pathMinor.setAttribute('d', minorSegs.join(''));
         pathMinor.setAttribute('class', 'grid-path-minor');
         pathMinor.setAttribute('vector-effect', 'non-scaling-stroke');
-        if (light) pathMinor.style.stroke = 'rgba(0, 0, 0, 0.08)';
+        pathMinor.style.stroke = minorStroke;
         els.grid.appendChild(pathMinor);
       }
 
@@ -464,7 +477,7 @@ function rebuildGrid() {
         pathMajor.setAttribute('d', majorSegs.join(''));
         pathMajor.setAttribute('class', 'grid-path-major');
         pathMajor.setAttribute('vector-effect', 'non-scaling-stroke');
-        if (light) pathMajor.style.stroke = 'rgba(0, 0, 0, 0.16)';
+        pathMajor.style.stroke = majorStroke;
         els.grid.appendChild(pathMajor);
       }
     }
@@ -499,6 +512,211 @@ function rebuildGrid() {
       els.grid.appendChild(originCircle);
     }
   }
+}
+
+const GRID_CFG_STORAGE_KEY = 'animEditor.gridConfig.v1';
+
+function loadSavedGridConfig() {
+  try {
+    const raw = localStorage.getItem(GRID_CFG_STORAGE_KEY);
+    if (!raw) return;
+    const cfg = JSON.parse(raw);
+    if (!cfg || typeof cfg !== 'object') return;
+    if (Number.isFinite(Number(cfg.step))) App.grid.step = clamp(Math.round(Number(cfg.step)), 1, 512);
+    if (Number.isFinite(Number(cfg.majorEvery))) App.grid.majorEvery = clamp(Math.round(Number(cfg.majorEvery)), 0, 32);
+    if (cfg.originMode === 'center' || cfg.originMode === 'frame-topleft') App.grid.originMode = cfg.originMode;
+    if (typeof cfg.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(cfg.color)) App.grid.color = cfg.color;
+    if (Number.isFinite(Number(cfg.opacity))) App.grid.opacity = clamp(Number(cfg.opacity), 0.03, 0.75);
+  } catch (e) {}
+}
+
+function saveGridConfig() {
+  try {
+    localStorage.setItem(GRID_CFG_STORAGE_KEY, JSON.stringify({
+      step: App.grid.step,
+      majorEvery: App.grid.majorEvery,
+      originMode: App.grid.originMode,
+      color: App.grid.color,
+      opacity: App.grid.opacity,
+    }));
+  } catch (e) {}
+}
+
+function closeGridSettingsPopover() {
+  if (els.gridSettingsPopover) els.gridSettingsPopover.hidden = true;
+  if (els.btnGridSettings) els.btnGridSettings.classList.remove('active');
+}
+
+function toggleGridSettingsPopover(anchorEl) {
+  const pop = els.gridSettingsPopover;
+  if (!pop) return;
+  if (!pop.hidden) {
+    closeGridSettingsPopover();
+    return;
+  }
+  if (els.guidesSettingsPopover) els.guidesSettingsPopover.hidden = true;
+  if (els.btnStageGuidesMenu) els.btnStageGuidesMenu.classList.remove('active');
+  if (els.stageContextMenu) els.stageContextMenu.hidden = true;
+
+  renderGridSettingsPopover();
+  pop.hidden = false;
+  if (els.btnGridSettings) els.btnGridSettings.classList.add('active');
+
+  const btn = anchorEl || els.btnGridSettings;
+  if (btn && btn.getBoundingClientRect) {
+    const r = btn.getBoundingClientRect();
+    const left = clamp(r.left, 8, Math.max(8, window.innerWidth - 300));
+    const top = clamp(r.bottom + 6, 8, Math.max(8, window.innerHeight - 360));
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+}
+
+function renderGridSettingsPopover() {
+  const pop = els.gridSettingsPopover;
+  if (!pop) return;
+  const stepPresets = [4, 8, 16, 32, 64, 100];
+  const swatches = ['#9fb0c8', '#3bc9db', '#51cf66', '#ffd43b', '#ff8787', '#ffffff'];
+  const opPct = Math.round((Number(App.grid.opacity) || 0.14) * 100);
+
+  pop.innerHTML =
+    '<div class="popover-head">' +
+      '<span>Настройка сетки макета</span>' +
+      '<button type="button" class="guide-del-x" data-grid-act="close" title="Закрыть"><span class="material-icons" style="font-size:15px">close</span></button>' +
+    '</div>' +
+    '<div class="popover-section" style="display:flex;gap:10px;align-items:center">' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" data-grid-chk="show" ' + (App.grid.showGrid ? 'checked' : '') + '> Сетка</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" data-grid-chk="snap" ' + (App.grid.snap ? 'checked' : '') + '> Привязка</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" data-grid-chk="cross" ' + (App.grid.showCrosshair ? 'checked' : '') + '> Оси 0,0</label>' +
+    '</div>' +
+    '<div class="popover-section">' +
+      '<span class="popover-label">Шаг ячейки (px):</span>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px">' +
+        stepPresets.map(s => '<button type="button" class="btn small' + (App.grid.step === s ? ' primary' : '') + '" data-grid-step="' + s + '" style="padding:2px 7px;min-width:34px">' + s + '</button>').join('') +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input type="number" min="1" max="512" step="1" value="' + App.grid.step + '" data-grid-input="step" style="width:74px">' +
+        '<span style="color:var(--fg-dim);font-size:11px">Крупная клетка каждые:</span>' +
+        '<select data-grid-input="major" style="flex:1">' +
+          [0, 2, 4, 5, 8, 10].map(m => '<option value="' + m + '"' + (Number(App.grid.majorEvery) === m ? ' selected' : '') + '>' + (m === 0 ? 'Выкл' : (m + '× (' + (m * App.grid.step) + 'px)')) + '</option>').join('') +
+        '</select>' +
+      '</div>' +
+    '</div>' +
+    '<div class="popover-section">' +
+      '<span class="popover-label">Отсчёт узлов сетки (в режиме Сцена):</span>' +
+      '<select data-grid-input="origin" style="width:100%">' +
+        '<option value="center"' + (App.grid.originMode === 'center' ? ' selected' : '') + '>От центра сцены (0, 0)</option>' +
+        '<option value="frame-topleft"' + (App.grid.originMode === 'frame-topleft' ? ' selected' : '') + '>От левого верхнего угла фрэйма (1366×768)</option>' +
+      '</select>' +
+    '</div>' +
+    '<div class="popover-section">' +
+      '<span class="popover-label">Цвет и прозрачность линий (<span data-grid-op-lbl>' + opPct + '%</span>):</span>' +
+      '<div class="swatch-row" style="margin-bottom:6px">' +
+        swatches.map(c => '<button type="button" class="color-swatch' + (String(App.grid.color).toLowerCase() === c ? ' active' : '') + '" style="background:' + c + '" data-grid-color="' + c + '" title="' + c + '"></button>').join('') +
+        '<input type="color" value="' + (App.grid.color || '#9fb0c8') + '" data-grid-input="color" style="width:26px;height:22px;padding:0;border:none;background:transparent;cursor:pointer">' +
+      '</div>' +
+      '<input type="range" min="4" max="65" step="1" value="' + opPct + '" data-grid-input="opacity" style="width:100%">' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;gap:6px">' +
+      '<button type="button" class="btn small" data-grid-act="reset">Сбросить по умолч.</button>' +
+      '<button type="button" class="btn small primary" data-grid-act="close">Готово</button>' +
+    '</div>';
+
+  pop.querySelectorAll('[data-grid-step]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      App.grid.step = clamp(parseInt(btn.getAttribute('data-grid-step'), 10) || 4, 1, 512);
+      saveGridConfig();
+      rebuildGrid();
+      renderGridSettingsPopover();
+    });
+  });
+
+  pop.querySelectorAll('[data-grid-chk]').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const k = chk.getAttribute('data-grid-chk');
+      if (k === 'show') App.grid.showGrid = !!chk.checked;
+      else if (k === 'snap') App.grid.snap = !!chk.checked;
+      else if (k === 'cross') App.grid.showCrosshair = !!chk.checked;
+      updateGridButtonsUI();
+      rebuildGrid();
+    });
+  });
+
+  const stepInp = pop.querySelector('[data-grid-input="step"]');
+  if (stepInp) {
+    stepInp.addEventListener('change', () => {
+      App.grid.step = clamp(Math.round(Number(stepInp.value) || 4), 1, 512);
+      saveGridConfig();
+      rebuildGrid();
+      renderGridSettingsPopover();
+    });
+  }
+
+  const majorSel = pop.querySelector('[data-grid-input="major"]');
+  if (majorSel) {
+    majorSel.addEventListener('change', () => {
+      App.grid.majorEvery = clamp(parseInt(majorSel.value, 10) || 0, 0, 32);
+      saveGridConfig();
+      rebuildGrid();
+    });
+  }
+
+  const originSel = pop.querySelector('[data-grid-input="origin"]');
+  if (originSel) {
+    originSel.addEventListener('change', () => {
+      App.grid.originMode = originSel.value === 'frame-topleft' ? 'frame-topleft' : 'center';
+      saveGridConfig();
+      rebuildGrid();
+    });
+  }
+
+  pop.querySelectorAll('[data-grid-color]').forEach(sw => {
+    sw.addEventListener('click', () => {
+      App.grid.color = sw.getAttribute('data-grid-color');
+      saveGridConfig();
+      rebuildGrid();
+      renderGridSettingsPopover();
+    });
+  });
+
+  const colorInp = pop.querySelector('[data-grid-input="color"]');
+  if (colorInp) {
+    colorInp.addEventListener('input', () => {
+      App.grid.color = colorInp.value;
+      saveGridConfig();
+      rebuildGrid();
+    });
+  }
+
+  const opInp = pop.querySelector('[data-grid-input="opacity"]');
+  const opLbl = pop.querySelector('[data-grid-op-lbl]');
+  if (opInp) {
+    opInp.addEventListener('input', () => {
+      const pct = clamp(parseInt(opInp.value, 10) || 14, 4, 65);
+      App.grid.opacity = pct / 100;
+      if (opLbl) opLbl.textContent = pct + '%';
+      saveGridConfig();
+      rebuildGrid();
+    });
+  }
+
+  pop.querySelectorAll('[data-grid-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.getAttribute('data-grid-act');
+      if (act === 'reset') {
+        App.grid.step = 4;
+        App.grid.majorEvery = 5;
+        App.grid.originMode = 'center';
+        App.grid.color = '#9fb0c8';
+        App.grid.opacity = 0.14;
+        saveGridConfig();
+        rebuildGrid();
+        renderGridSettingsPopover();
+      } else {
+        closeGridSettingsPopover();
+      }
+    });
+  });
 }
 
 function updateGridButtonsUI() {
@@ -729,6 +947,47 @@ function setupBgPicker() {
 // -------- ввод окна просмотра --------
 
 function setupSceneInput() {
+  loadSavedGridConfig();
+
+  if (els.btnGridSettings) {
+    els.btnGridSettings.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleGridSettingsPopover(els.btnGridSettings);
+    });
+  }
+
+  // Закрытие всплывающих поповеров при клике вне них
+  window.addEventListener('mousedown', (e) => {
+    const t = e.target;
+    if (els.gridSettingsPopover && !els.gridSettingsPopover.hidden) {
+      const insideGrid = (t && t.closest && (t.closest('#grid-settings-popover') || t.closest('#btn-grid-settings')));
+      if (!insideGrid) closeGridSettingsPopover();
+    }
+    if (els.guidesSettingsPopover && !els.guidesSettingsPopover.hidden) {
+      const insideGuides = (t && t.closest && (t.closest('#guides-settings-popover') || t.closest('#btn-stage-guides-menu')));
+      if (!insideGuides) {
+        els.guidesSettingsPopover.hidden = true;
+        if (els.btnStageGuidesMenu) els.btnStageGuidesMenu.classList.remove('active');
+      }
+    }
+    if (els.stageContextMenu && !els.stageContextMenu.hidden) {
+      const insideCtx = (t && t.closest && t.closest('#stage-context-menu'));
+      if (!insideCtx) els.stageContextMenu.hidden = true;
+    }
+  });
+
+  // Глобальное отключение системного браузерного меню по ПКМ в рабочей области редактора
+  // (кроме текстовых/числовых полей ввода; панорамирование на ПКМ НЕ вешаем)
+  document.addEventListener('contextmenu', (e) => {
+    if (e.defaultPrevented) return;
+    const t = e.target;
+    if (t && t.closest && t.closest('input[type="text"], input[type="number"], input[type="search"], textarea, [contenteditable="true"]')) {
+      return;
+    }
+    e.preventDefault();
+    if (els.stageContextMenu) els.stageContextMenu.hidden = true;
+  });
+
   const vp = els.viewport;
   vp.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -744,6 +1003,11 @@ function setupSceneInput() {
   }, { passive: false });
 
   vp.addEventListener('mousedown', (e) => {
+    // Линейки и направляющие обрабатывают перетаскивание самостоятельно
+    if (e.target && e.target.closest && e.target.closest('.stage-ruler, .stage-ruler-corner, .stage-guide-hit')) {
+      return;
+    }
+    // Панорамирование только на Space + ЛКМ или СКМ (колесо), НЕ на ПКМ
     if (App.spaceDown || e.button === 1) {
       App.panning = true;
       App.panStart = { sx: e.clientX, sy: e.clientY, cx: App.camera.x, cy: App.camera.y };
