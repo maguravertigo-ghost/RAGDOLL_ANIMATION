@@ -4,30 +4,55 @@
 <meta charset="UTF-8">
 <title>Animation Editor</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
-<body>
+<body data-editor-mode="object">
   <header>
     <span class="brand">Animation Editor</span>
-    <span class="app-version" id="app-version">v0.3.0</span>
-    <button class="icon-btn" id="btn-objects" title="Открыть объект">
-      <span class="material-icons">folder_open</span>
+    <span class="app-version" id="app-version">v0.4.0</span>
+
+    <button class="mode-switch-btn mode-object" id="btn-editor-mode" type="button" title="Переключить режим: Анимация объектов (малиновый) / Редактор сцены (зелёный)">
+      <span class="material-icons" id="editor-mode-icon">animation</span>
+      <span id="editor-mode-label">АНИМАЦИЯ ОБЪЕКТОВ</span>
     </button>
-    <div class="header-name-group" id="obj-name-group">
-      <input class="name-field" id="obj-name" readonly tabindex="-1" placeholder="объект не выбран" autocomplete="off" spellcheck="false">
-      <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-obj-inline-rename" type="button" title="Переименовать объект">
-        <span class="material-icons">edit</span>
+
+    <div class="header-mode-bar" id="header-object-controls">
+      <button class="icon-btn" id="btn-objects" title="Открыть объект">
+        <span class="material-icons">folder_open</span>
+      </button>
+      <div class="header-name-group" id="obj-name-group">
+        <input class="name-field" id="obj-name" readonly tabindex="-1" placeholder="объект не выбран" autocomplete="off" spellcheck="false">
+        <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-obj-inline-rename" type="button" title="Переименовать объект">
+          <span class="material-icons">edit</span>
+        </button>
+      </div>
+      <button class="icon-btn" id="btn-anim" title="Анимация">
+        <span class="material-icons">animation</span>
+      </button>
+      <div class="header-name-group" id="anim-name-group">
+        <input class="name-field" id="anim-name" readonly tabindex="-1" placeholder="—" autocomplete="off" spellcheck="false">
+        <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-anim-inline-rename" type="button" title="Переименовать анимацию">
+          <span class="material-icons">edit</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="header-mode-bar" id="header-stage-controls" hidden>
+      <button class="icon-btn" id="btn-stages" title="Открыть / создать сцену">
+        <span class="material-icons">folder_open</span>
+      </button>
+      <div class="header-name-group" id="stage-name-group">
+        <input class="name-field" id="stage-name" readonly tabindex="-1" placeholder="сцена не выбрана" autocomplete="off" spellcheck="false">
+        <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-stage-inline-rename" type="button" title="Переименовать сцену">
+          <span class="material-icons">edit</span>
+        </button>
+      </div>
+      <button class="stage-res-chip" id="btn-stage-bg-quick" type="button" title="Базовое разрешение фрэйма сцены и настройки бэкграунда">
+        <span class="material-icons">aspect_ratio</span>
+        <span id="stage-res-label">1366 × 768</span>
       </button>
     </div>
-    <button class="icon-btn" id="btn-anim" title="Анимация">
-      <span class="material-icons">animation</span>
-    </button>
-    <div class="header-name-group" id="anim-name-group">
-      <input class="name-field" id="anim-name" readonly tabindex="-1" placeholder="—" autocomplete="off" spellcheck="false">
-      <button class="icon-btn icon-btn-sm header-edit-btn" id="btn-anim-inline-rename" type="button" title="Переименовать анимацию">
-        <span class="material-icons">edit</span>
-      </button>
-    </div>
+
     <span class="spacer"></span>
     <button class="storage-chip" id="btn-storage-status" title="Источник проектов (нажмите для настройки)">
       <span class="storage-dot" id="storage-dot"></span>
@@ -45,13 +70,30 @@
     <section class="center">
       <div class="viewport" id="viewport">
         <svg id="scene-svg" xmlns="http://www.w3.org/2000/svg">
+          <defs id="stage-defs">
+            <clipPath id="stage-clip-path">
+              <rect id="stage-clip-rect" x="-683" y="-384" width="1366" height="768"></rect>
+            </clipPath>
+          </defs>
           <g id="world">
+            <g id="stage-root" hidden>
+              <rect id="stage-shadow-rect" class="stage-shadow-rect" x="-683" y="-384" width="1366" height="768"></rect>
+              <g id="stage-content">
+                <g id="stage-bg-group">
+                  <rect id="stage-bg-rect" x="-683" y="-384" width="1366" height="768" fill="#243447"></rect>
+                  <g id="stage-bg-media"></g>
+                </g>
+                <g id="stage-layers-svg"></g>
+              </g>
+              <rect id="stage-frame-border" class="stage-frame-border" x="-683" y="-384" width="1366" height="768" vector-effect="non-scaling-stroke"></rect>
+            </g>
             <g id="grid"></g>
             <g id="onion" class="part-ghost"></g>
             <g id="scene"></g>
           </g>
         </svg>
         <svg id="gizmo-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+        <svg id="stage-gizmo-svg" xmlns="http://www.w3.org/2000/svg" hidden></svg>
       </div>
 
 	<div class="tools-row">
@@ -77,7 +119,7 @@
 		  <line x1="2.5" y1="11.2" x2="15.5" y2="11.2"></line>
 		</svg>
 	  </button>
-	  <button class="icon-btn" id="btn-snap" title="Привязка к сетке (по Pivot Point слоя): вкл/выкл">
+	  <button class="icon-btn" id="btn-snap" title="Привязка к сетке (по Pivot Point): вкл/выкл">
 		<svg class="svg-icon" viewBox="0 0 18 18" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 		  <path d="M5 3.5v4.5a4 4 0 0 0 8 0V3.5"></path>
 		  <line x1="3.8" y1="3.5" x2="6.2" y2="3.5"></line>
@@ -86,36 +128,46 @@
 		</svg>
 	  </button>
 
-	  <span class="sep"></span>
-	  <button class="icon-btn mode-btn" data-mode="1" title="Режим: масштаб / перемещение">
+	  <span class="sep obj-mode-only"></span>
+	  <button class="icon-btn mode-btn obj-mode-only" data-mode="1" title="Режим: масштаб / перемещение">
 		<span class="material-icons">open_with</span>
 	  </button>
-	  <button class="icon-btn mode-btn" data-mode="2" title="Режим: вращение / скос">
+	  <button class="icon-btn mode-btn obj-mode-only" data-mode="2" title="Режим: вращение / скос">
 		<span class="material-icons">rotate_right</span>
 	  </button>
-	  <button class="icon-btn" id="btn-realtime" title="Realtime: правки сразу пишутся в кадр">
+	  <button class="icon-btn obj-mode-only" id="btn-realtime" title="Realtime: правки сразу пишутся в кадр">
 		<span class="material-icons">flash_on</span>
 	  </button>
-	  <button class="icon-btn" id="btn-reset-anim" title="Создать reset animation">
+	  <button class="icon-btn obj-mode-only" id="btn-reset-anim" title="Создать reset animation">
 		<span class="material-icons">restart_alt</span>
 	  </button>
-	  <button class="icon-btn" id="btn-presets" title="Пресеты поз (сохранить / выбрать позу)">
+	  <button class="icon-btn obj-mode-only" id="btn-presets" title="Пресеты поз (сохранить / выбрать позу)">
 		<span class="material-icons">accessibility_new</span>
 	  </button>
 		
-	  <span class="sep"></span>
-	  <button class="icon-btn" id="btn-bg" title="Фон">
+	  <span class="sep obj-mode-only"></span>
+	  <button class="icon-btn obj-mode-only" id="btn-bg" title="Фон">
 		<span class="material-icons">palette</span>
 	  </button>
 
-	  <label class="fps-wrap" title="Скорость воспроизведения (0..60)">
+	  <label class="fps-wrap obj-mode-only" title="Скорость воспроизведения (0..60)">
 		<input type="range" id="fps-slider" min="0" max="60" step="1" value="60">
 		<span class="fps-value" id="fps-value">60</span>
 	  </label>
 
+	  <span class="sep stage-mode-only" hidden></span>
+	  <button class="icon-btn stage-mode-only" id="btn-stage-add-obj" title="Добавить объект или декор в центр сцены" hidden>
+		<span class="material-icons">add_box</span>
+	  </button>
+	  <button class="icon-btn stage-mode-only" id="btn-stage-clip" title="Обрезать сцену по границам фрэйма экрана: вкл/выкл" hidden>
+		<span class="material-icons">crop</span>
+	  </button>
+	  <span class="stage-tool-note stage-mode-only" id="stage-ctrl-hint" hidden>Удерживайте <b>Ctrl + ЛКМ</b> (или тяните рамку) для перетаскивания объектов</span>
+
 	  <span class="spacer"></span>
+	  <span class="stage-fps-badge stage-mode-only" id="stage-fps-badge" hidden>60 FPS</span>
 	  <span class="sel-size" id="sel-size">---, ---</span>
-	  <button class="icon-btn" id="btn-timeline-toggle" title="Свернуть / развернуть таймлайн">
+	  <button class="icon-btn obj-mode-only" id="btn-timeline-toggle" title="Свернуть / развернуть таймлайн">
 		<span class="material-icons" id="timeline-toggle-icon">expand_more</span>
 	  </button>
 	</div>
@@ -201,12 +253,46 @@
 			</div>
 		  </div>
 		</div>
+
+		<div class="stage-bar" id="stage-bar" hidden>
+		  <button class="stage-play-btn" id="stage-play-btn" type="button" title="Запустить / остановить живой предпросмотр всей сцены">
+			<span class="material-icons" id="stage-play-icon">play_arrow</span>
+			<span id="stage-play-label">Предпросмотр</span>
+		  </button>
+		  <button class="icon-btn" id="stage-stop-btn" type="button" title="Остановить и сбросить время предпросмотра (00:00)">
+			<span class="material-icons">stop</span>
+		  </button>
+		  <span class="time-field time-field-cur" id="stage-tc">00:00:000</span>
+
+		  <label class="fps-wrap" title="Глобальная скорость предпросмотра сцены (10%..200%)">
+			<input type="range" id="stage-speed-slider" min="10" max="200" step="5" value="100">
+			<span class="fps-value" id="stage-speed-value">1.0×</span>
+		  </label>
+
+		  <span class="sep"></span>
+
+		  <div class="stage-rubber-controls" title="Тест резинового растягивания экрана (проверка относительной привязки объектов)">
+			<span class="stage-rubber-title">Экран:</span>
+			<label class="stage-rubber-axis">
+			  <span>W</span>
+			  <input type="range" id="stage-rubber-w" min="480" max="2560" step="2" value="1366">
+			</label>
+			<label class="stage-rubber-axis">
+			  <span>H</span>
+			  <input type="range" id="stage-rubber-h" min="360" max="1440" step="2" value="768">
+			</label>
+			<span class="stage-rubber-readout" id="stage-rubber-readout">1366 × 768 (100%)</span>
+			<button class="icon-btn icon-btn-sm" id="stage-rubber-reset" type="button" title="Вернуть опорный размер экрана">
+			  <span class="material-icons">restart_alt</span>
+			</button>
+		  </div>
+		</div>
     </section>
 
     <aside class="right">
       <div class="panel-title">
-        <span>Слои</span>
-        <span class="panel-actions">
+        <span id="layers-panel-title">Слои</span>
+        <span class="panel-actions" id="layers-actions-object">
           <button class="icon-btn icon-btn-sm" id="btn-group" title="Создать группу">
             <span class="material-icons">create_new_folder</span>
           </button>
@@ -214,8 +300,27 @@
             <span class="material-icons">folder_open</span>
           </button>
         </span>
+        <span class="panel-actions" id="layers-actions-stage" hidden>
+          <button class="icon-btn icon-btn-sm" id="btn-stage-layer-add" title="Добавить объект на сцену (в центр)">
+            <span class="material-icons">add_circle_outline</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="btn-stage-folder-add" title="Создать папку слоёв сцены">
+            <span class="material-icons">create_new_folder</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="btn-stage-folder-ungroup" title="Разгруппировать выбранную папку">
+            <span class="material-icons">folder_open</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="btn-stage-layer-clone" title="Дублировать выбранный слой на сцене">
+            <span class="material-icons">content_copy</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="btn-stage-layer-del" title="Удалить выбранный слой со сцены">
+            <span class="material-icons">delete</span>
+          </button>
+        </span>
       </div>
       <ul id="layers-list"></ul>
+      <ul id="stage-layers-list" hidden></ul>
+      <input type="file" id="stage-file-input" accept=".svg,.png,.jpg,.jpeg,.webp,.gif,image/*" hidden>
 
       <div class="panel-title">
         <span id="props-title">Свойства</span>
@@ -488,11 +593,77 @@
     </div>
   </div>
 
+  <div class="modal" id="modal-stages" hidden>
+    <div class="modal-box modal-box-objects">
+      <div class="modal-title modal-title-flex">
+        <span>Открыть сцену</span>
+        <button class="icon-btn icon-btn-sm" id="modal-stages-x" title="Закрыть">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="objects-source-bar">
+        <span class="objects-source-text" id="stages-source-text"></span>
+        <div class="objects-source-actions">
+          <button type="button" class="btn-sm primary" id="stages-btn-reconnect" hidden>Подключить папку</button>
+          <button type="button" class="btn-sm" id="stages-btn-pick">Локальная папка…</button>
+        </div>
+      </div>
+      <ul id="stages-list" class="list-theme-green"></ul>
+      <div class="modal-actions modal-actions-split">
+        <div class="modal-actions-left">
+          <button class="icon-btn icon-btn-sm" id="stage-add" title="Создать новую сцену (untitled_0…)">
+            <span class="material-icons">add</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="stage-clone" title="Клонировать выбранную сцену (_clone_0…)">
+            <span class="material-icons">content_copy</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="stage-rename" title="Переименовать выбранную сцену">
+            <span class="material-icons">edit</span>
+          </button>
+          <button class="icon-btn icon-btn-sm" id="stage-delete" title="Удалить выбранную сцену">
+            <span class="material-icons">delete</span>
+          </button>
+        </div>
+        <div class="modal-actions-right">
+          <button id="modal-stages-close">Закрыть</button>
+          <button id="stage-open" class="primary">Открыть</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-stage-pick-obj" hidden>
+    <div class="modal-box modal-box-objects">
+      <div class="modal-title modal-title-flex">
+        <span>Добавить элемент на сцену</span>
+        <button class="icon-btn icon-btn-sm" id="stage-pick-close-x" title="Закрыть">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="stage-pick-tabs">
+        <button type="button" class="stage-pick-tab active" id="stage-pick-tab-obj">Анимированные объекты (anim/)</button>
+        <button type="button" class="stage-pick-tab" id="stage-pick-tab-asset">Декорации SVG / PNG (stage/)</button>
+      </div>
+      <ul id="stage-pick-list" class="list-theme-green"></ul>
+      <div class="modal-actions modal-actions-split">
+        <div class="modal-actions-left">
+          <button type="button" class="btn-sm" id="stage-pick-upload-btn" title="Загрузить SVG или PNG файл с компьютера в сцену">
+            Загрузить файл SVG / PNG…
+          </button>
+        </div>
+        <div class="modal-actions-right">
+          <button id="stage-pick-cancel">Отмена</button>
+          <button id="stage-pick-ok" class="primary">Добавить в центр</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal modal-top" id="modal-unsaved" hidden>
     <div class="modal-box modal-box-unsaved">
       <div class="modal-title">Несохранённые изменения</div>
       <div class="modal-body" id="unsaved-text">
-        В текущем объекте есть несохранённые изменения. Сохранить их перед переключением?
+        В текущем проекте есть несохранённые изменения. Сохранить их перед переключением?
       </div>
       <div class="modal-actions modal-actions-unsaved">
         <button id="unsaved-discard" class="danger-btn">Игнорировать изменения</button>
@@ -504,14 +675,15 @@
   </div>
   <div class="hint" id="hint"></div>
 
-  <script src="js/gizmo.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
-  <script src="js/api.js?v=3"></script>
-  <script src="js/scene.js?v=3"></script>
-  <script src="js/layers.js?v=3"></script>
-  <script src="js/animation.js?v=3"></script>
-  <script src="js/timeline.js?v=3"></script>
-  <script src="js/presets.js?v=3"></script>
-  <script src="js/main.js?v=3"></script>
+  <script src="js/gizmo.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
+  <script src="js/api.js?v=4"></script>
+  <script src="js/scene.js?v=4"></script>
+  <script src="js/layers.js?v=4"></script>
+  <script src="js/animation.js?v=4"></script>
+  <script src="js/timeline.js?v=4"></script>
+  <script src="js/presets.js?v=4"></script>
+  <script src="js/stage.js?v=4"></script>
+  <script src="js/main.js?v=4"></script>
 </body>
 </html>

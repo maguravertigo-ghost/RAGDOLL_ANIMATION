@@ -158,12 +158,15 @@ function setupGlobalShortcuts() {
       if (!els.modalBg.hidden) closeBgModal();
       if (!els.modalSettings.hidden) closeSettingsModal();
       if (els.modalPresets && !els.modalPresets.hidden) closePresetsModal();
+      if (els.modalStages && !els.modalStages.hidden && typeof closeStagesModal === 'function') closeStagesModal();
+      if (els.modalStagePickObj && !els.modalStagePickObj.hidden && typeof closeStagePickModal === 'function') closeStagePickModal();
       return;
     }
 
     if (e.code === 'KeyS' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      saveObject();
+      if (App.editorMode === 'stage' && typeof saveCurrentStage === 'function') saveCurrentStage();
+      else saveObject();
       return;
     }
 
@@ -183,6 +186,18 @@ function setupGlobalShortcuts() {
         vp.classList.add('space');
       }
       e.preventDefault();
+      return;
+    }
+
+    if (App.editorMode === 'stage') {
+      if ((e.key === 'Delete' || e.key === 'Backspace') &&
+          typeof deleteSelectedStageItems === 'function') {
+        const hasStageSel = Array.from(App.stage.selectedIds).some(id => id !== '__bg__');
+        if (hasStageSel) {
+          e.preventDefault();
+          deleteSelectedStageItems();
+        }
+      }
       return;
     }
 
@@ -221,6 +236,7 @@ function init() {
   setupBgPicker();
   setupOnionControls();
   setupPresetsControls();
+  if (typeof setupStageEditor === 'function') setupStageEditor();
 
   // Inline-переименование текущего объекта и анимации в верхнем баре
   setupHeaderInlineRename(
@@ -287,7 +303,10 @@ function init() {
       else openSettingsModal();
     });
   }
-  els.btnSave.addEventListener('click', saveObject);
+  els.btnSave.addEventListener('click', () => {
+    if (App.editorMode === 'stage' && typeof saveCurrentStage === 'function') saveCurrentStage();
+    else saveObject();
+  });
   els.btnSettings.addEventListener('click', openSettingsModal);
 
   els.settingsClose.addEventListener('click', closeSettingsModal);
@@ -420,7 +439,7 @@ function init() {
   });
 
   window.addEventListener('beforeunload', (e) => {
-    if (App.dirty) {
+    if (App.dirty || (App.stage && App.stage.dirty)) {
       e.preventDefault();
       e.returnValue = '';
     }
@@ -428,7 +447,7 @@ function init() {
 
   window.addEventListener('resize', () => {
     applyCamera();
-    renderTimeline();
+    if (App.editorMode === 'object') renderTimeline();
   });
 
   requestAnimationFrame(() => {
@@ -437,6 +456,11 @@ function init() {
   });
 
   initStorage().then(async () => {
+    const modeMatch = location.search.match(/[?&]mode=(stage|object)\b/i);
+    if (modeMatch && modeMatch[1].toLowerCase() === 'stage' && typeof setEditorMode === 'function') {
+      await setEditorMode('stage');
+      return;
+    }
     const m = location.search.match(/[?&]open=([^&]+)/);
     if (m) {
       openObject(decodeURIComponent(m[1]));
