@@ -4,7 +4,7 @@
 //  app.js — глобальное состояние App, кэш DOM, математика матриц и модалки
 // ============================================================
 
-const APP_VERSION = 'v0.6.1';
+const APP_VERSION = 'v0.7.0';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const $  = (sel, root) => (root || document).querySelector(sel);
 const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -187,6 +187,7 @@ function cacheEls() {
   els.editorModeLabel    = $('#editor-mode-label');
   els.headerObjectControls = $('#header-object-controls');
   els.headerStageControls  = $('#header-stage-controls');
+  els.headerChar3dControls = $('#header-char3d-controls');
 
   els.btnObjects         = $('#btn-objects');
   els.objNameGroup       = $('#obj-name-group');
@@ -230,6 +231,9 @@ function cacheEls() {
   els.stageRulerVCanvas = $('#stage-ruler-v-canvas');
   els.stageRulerHairY   = $('#stage-ruler-hair-y');
   els.stagePreviewFpsHud = $('#stage-preview-fps-hud');
+  els.char3dCanvas      = $('#char3d-canvas');
+  els.char3dBar         = $('#char3d-bar');
+  els.char3dLayersList  = $('#char3d-layers-list');
 
   // Tools row
   els.zoomLabel         = $('#zoom-label');
@@ -666,9 +670,17 @@ function confirmDialog(title, text, onConfirm) {
 
 function updateSaveButtonUI() {
   if (!els.btnSave) return;
-  const isDirty = App.editorMode === 'stage' ? !!App.stage.dirty : !!App.dirty;
+  const isChar3d = App.editorMode === 'char3d';
+  const isStage = App.editorMode === 'stage';
+  const isDirty = isChar3d
+    ? !!(typeof Char3DEditor !== 'undefined' && Char3DEditor.state.dirty)
+    : (isStage ? !!App.stage.dirty : !!App.dirty);
   els.btnSave.classList.toggle('dirty', isDirty);
-  if (App.editorMode === 'stage') {
+  if (isChar3d) {
+    els.btnSave.title = isDirty
+      ? 'Есть несохранённые изменения 3D-персонажа! Сохранить (Ctrl+S)'
+      : 'Сохранить 3D-персонажа (Ctrl+S)';
+  } else if (isStage) {
     els.btnSave.title = isDirty
       ? 'Есть несохранённые изменения сцены! Сохранить сцену (Ctrl+S)'
       : 'Сохранить сцену (Ctrl+S)';
