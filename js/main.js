@@ -182,14 +182,16 @@ function setupGlobalShortcuts() {
 
     if (e.code === 'KeyS' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      if (App.editorMode === 'stage' && typeof saveCurrentStage === 'function') saveCurrentStage();
+      if (App.editorMode === 'char3d' && typeof Char3DEditor !== 'undefined') Char3DEditor.saveCurrentChar3D();
+      else if (App.editorMode === 'stage' && typeof saveCurrentStage === 'function') saveCurrentStage();
       else saveObject();
       return;
     }
 
     if (e.key === '0' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      fitView();
+      if (App.editorMode === 'char3d' && typeof Char3DEditor !== 'undefined') Char3DEditor.fitChar3DCamera();
+      else fitView();
       return;
     }
 
@@ -349,7 +351,8 @@ function init() {
     });
   }
   els.btnSave.addEventListener('click', () => {
-    if (App.editorMode === 'stage' && typeof saveCurrentStage === 'function') saveCurrentStage();
+    if (App.editorMode === 'char3d' && typeof Char3DEditor !== 'undefined') Char3DEditor.saveCurrentChar3D();
+    else if (App.editorMode === 'stage' && typeof saveCurrentStage === 'function') saveCurrentStage();
     else saveObject();
   });
   els.btnSettings.addEventListener('click', openSettingsModal);
@@ -393,6 +396,16 @@ function init() {
   $$('.tools-row [data-act]').forEach(btn => {
     btn.addEventListener('click', () => {
       const act = btn.dataset.act;
+      if (App.editorMode === 'char3d' && typeof Char3DEditor !== 'undefined') {
+        if (act === 'zoom-fit') { Char3DEditor.fitChar3DCamera(); return; }
+        const f = act === 'zoom-in' ? 1.18 : (1 / 1.18);
+        Char3DEditor.state.perspCam.dist = clamp(Char3DEditor.state.perspCam.dist / f, 0.7, 12);
+        Char3DEditor.state.orthoCam.front.scale = clamp(Char3DEditor.state.orthoCam.front.scale * f, 45, 900);
+        Char3DEditor.state.orthoCam.side.scale  = clamp(Char3DEditor.state.orthoCam.side.scale  * f, 45, 900);
+        Char3DEditor.state.orthoCam.top.scale   = clamp(Char3DEditor.state.orthoCam.top.scale   * f, 45, 900);
+        Char3DEditor.renderViewport();
+        return;
+      }
       if (act === 'zoom-in')  zoomBy(1.2);
       if (act === 'zoom-out') zoomBy(1 / 1.2);
       if (act === 'zoom-fit') fitView();
@@ -484,13 +497,17 @@ function init() {
   });
 
   window.addEventListener('beforeunload', (e) => {
-    if (App.dirty || (App.stage && App.stage.dirty)) {
+    if (App.dirty || (App.stage && App.stage.dirty) || (typeof Char3DEditor !== 'undefined' && Char3DEditor.state.dirty)) {
       e.preventDefault();
       e.returnValue = '';
     }
   });
 
   window.addEventListener('resize', () => {
+    if (App.editorMode === 'char3d' && typeof Char3DEditor !== 'undefined') {
+      Char3DEditor.renderViewport();
+      return;
+    }
     applyCamera();
     if (App.editorMode === 'object') renderTimeline();
   });
@@ -501,9 +518,9 @@ function init() {
   });
 
   initStorage().then(async () => {
-    const modeMatch = location.search.match(/[?&]mode=(stage|object)\b/i);
-    if (modeMatch && modeMatch[1].toLowerCase() === 'stage' && typeof setEditorMode === 'function') {
-      await setEditorMode('stage');
+    const modeMatch = location.search.match(/[?&]mode=(stage|object|char3d)\b/i);
+    if (modeMatch && modeMatch[1].toLowerCase() !== 'object' && typeof setEditorMode === 'function') {
+      await setEditorMode(modeMatch[1].toLowerCase());
       return;
     }
     const m = location.search.match(/[?&]open=([^&]+)/);
