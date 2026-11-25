@@ -5548,99 +5548,77 @@ function deleteStageFromModal() {
   );
 }
 
-// -------- переключение режимов «2D Анимация» / «2D Сцена» / «3D Персонаж» --------
+// -------- переключение режимов «Анимация объектов» (малиновый) / «Сцена» (зелёный) --------
 
 async function setEditorMode(nextMode) {
-  if (nextMode !== 'object' && nextMode !== 'stage' && nextMode !== 'char3d') return;
-  const prevMode = App.editorMode;
-  if (prevMode === nextMode) return;
+  if (nextMode !== 'object' && nextMode !== 'stage') return;
+  if (App.editorMode === nextMode) return;
 
-  // Сохраняем состояние предыдущего режима перед выходом
-  if (prevMode === 'object') {
+  const toStage = (nextMode === 'stage');
+  if (toStage) {
     if (App.anim.playing && typeof stopPlayback === 'function') stopPlayback();
     App.objectCamera = clone(App.camera);
     syncLiveObjectToStageCache();
-  } else if (prevMode === 'stage') {
+  } else {
     if (App.stage.previewFullscreen) exitStageFullscreenPreview();
     else stopStagePreview();
     App.stage.camera = clone(App.camera);
-    closeStageContextMenu();
-    closeGuidesSettingsPopover();
-  } else if (prevMode === 'char3d') {
-    if (typeof Char3DEditor !== 'undefined') Char3DEditor.stopAnimPlayback();
   }
-
-  const isObj = (nextMode === 'object');
-  const isStage = (nextMode === 'stage');
-  const isChar3d = (nextMode === 'char3d');
 
   App.editorMode = nextMode;
   document.body.setAttribute('data-editor-mode', nextMode);
 
-  $$('[data-switch-editor-mode]').forEach(btn => {
-    btn.classList.toggle('active', btn.getAttribute('data-switch-editor-mode') === nextMode);
-  });
+  if (els.btnEditorMode) {
+    els.btnEditorMode.classList.toggle('mode-object', !toStage);
+    els.btnEditorMode.classList.toggle('mode-stage', toStage);
+    els.btnEditorMode.title = toStage
+      ? 'Текущий режим: Редактор сцены (зелёный). Нажмите для возврата в Анимацию объектов (малиновый)'
+      : 'Текущий режим: Анимация объектов (малиновый). Нажмите для перехода в Редактор сцены (зелёный)';
+  }
+  if (els.editorModeIcon)  els.editorModeIcon.textContent  = toStage ? 'landscape' : 'animation';
+  if (els.editorModeLabel) els.editorModeLabel.textContent = toStage ? 'СЦЕНА' : 'АНИМАЦИЯ';
 
-  if (els.headerObjectControls) els.headerObjectControls.hidden = !isObj;
-  if (els.headerStageControls)  els.headerStageControls.hidden  = !isStage;
-  if (els.headerChar3dControls) els.headerChar3dControls.hidden = !isChar3d;
+  if (els.headerObjectControls) els.headerObjectControls.hidden = toStage;
+  if (els.headerStageControls)  els.headerStageControls.hidden  = !toStage;
 
-  // Вьюпорт, линейки, направляющие и оверлеи Gizmo (без hidden на <svg>)
-  if (els.svg)           setSvgOverlayVisible(els.svg, !isChar3d);
-  if (els.scene)         els.scene.style.display = isObj ? '' : 'none';
-  if (els.onion)         els.onion.style.display = isObj ? '' : 'none';
-  setSvgOverlayVisible(els.gizmoSvg, isObj);
+  // Вьюпорт, линейки, направляющие и оверлеи Gizmo (без hidden на <svg>, т.к. SVGElement не снимает атрибут [hidden])
+  if (els.scene)         els.scene.style.display = toStage ? 'none' : '';
+  if (els.onion)         els.onion.style.display = toStage ? 'none' : '';
+  setSvgOverlayVisible(els.gizmoSvg, !toStage);
   if (els.stageRoot) {
     els.stageRoot.removeAttribute('hidden');
-    els.stageRoot.style.display = isStage ? '' : 'none';
+    els.stageRoot.style.display = toStage ? '' : 'none';
   }
-  setSvgOverlayVisible(els.stageGizmoSvg, isStage);
-  setSvgOverlayVisible(els.stageGuidesSvg, isStage && !!App.stage.showRulers);
+  setSvgOverlayVisible(els.stageGizmoSvg, toStage);
+  setSvgOverlayVisible(els.stageGuidesSvg, toStage && !!App.stage.showRulers);
 
-  if (els.char3dCanvas) {
-    els.char3dCanvas.style.display = isChar3d ? 'block' : 'none';
-  }
-
-  // Панели инструментов и нижние бары по режимам
-  $$('.obj-mode-only').forEach(el => { el.hidden = !isObj; });
-  $$('.stage-mode-only').forEach(el => { el.hidden = !isStage; });
-  $$('.char3d-mode-only').forEach(el => { el.hidden = !isChar3d; });
-  $$('.not-char3d-only').forEach(el => { el.hidden = isChar3d; });
-
-  if (els.playbackBar) els.playbackBar.hidden = !isObj;
-  if (els.timeline)    els.timeline.hidden    = !isObj;
+  // В режиме Сцены полностью скрываем ключевой таймлайн и полосу воспроизведения объекта
+  $$('.obj-mode-only').forEach(el => { el.hidden = toStage; });
+  $$('.stage-mode-only').forEach(el => { el.hidden = !toStage; });
+  if (els.playbackBar) els.playbackBar.hidden = toStage;
+  if (els.timeline)    els.timeline.hidden    = toStage;
   if (els.stageBar) {
-    els.stageBar.hidden = !isStage;
-    els.stageBar.classList.toggle('collapsed', isStage && !!App.stage.barCollapsed);
+    els.stageBar.hidden = !toStage;
+    els.stageBar.classList.toggle('collapsed', toStage && !!App.stage.barCollapsed);
   }
-  if (els.char3dBar)   els.char3dBar.hidden = !isChar3d;
 
-  if (els.layersHeaderTitle) {
-    els.layersHeaderTitle.textContent = isChar3d ? 'Меши и экипировка' : (isStage ? 'Слои сцены' : 'Слои');
-  }
-  if (els.layersActionsObject) els.layersActionsObject.hidden = !isObj;
-  if (els.layersActionsStage)  els.layersActionsStage.hidden  = !isStage;
-  if (els.layersList)          els.layersList.hidden          = !isObj;
-  if (els.stageLayersList)     els.stageLayersList.hidden     = !isStage;
-  if (els.char3dLayersList)    els.char3dLayersList.hidden    = !isChar3d;
+  if (els.layersHeaderTitle)   els.layersHeaderTitle.textContent = toStage ? 'Слои сцены' : 'Слои';
+  if (els.layersActionsObject) els.layersActionsObject.hidden = toStage;
+  if (els.layersActionsStage)  els.layersActionsStage.hidden  = !toStage;
+  if (els.layersList)          els.layersList.hidden          = toStage;
+  if (els.stageLayersList)     els.stageLayersList.hidden     = !toStage;
 
   updateSaveButtonUI();
 
-  if (isStage) {
+  if (toStage) {
     els.viewport.classList.remove('bg-checker');
     els.viewport.style.background = '';
     App.camera = clone(App.stage.camera);
     await openInitialStageIfNeeded();
     renderStageRulersAndGuides();
-  } else if (isChar3d) {
-    renderStageRulersAndGuides();
-    els.viewport.classList.remove('bg-checker');
-    els.viewport.style.background = '#121620';
-    if (typeof Char3DEditor !== 'undefined') {
-      Char3DEditor.init();
-      Char3DEditor.renderAllUI();
-    }
   } else {
+    closeStageContextMenu();
+    closeGuidesSettingsPopover();
     renderStageRulersAndGuides();
     App.camera = clone(App.objectCamera);
     applyBackgroundToViewport();
@@ -5654,9 +5632,7 @@ async function setEditorMode(nextMode) {
 }
 
 function toggleEditorMode() {
-  const order = ['object', 'stage', 'char3d'];
-  const idx = order.indexOf(App.editorMode);
-  setEditorMode(order[(idx + 1) % order.length]);
+  setEditorMode(App.editorMode === 'stage' ? 'object' : 'stage');
 }
 
 // -------- инициализация всех привязок Редактора сцены --------
@@ -5665,12 +5641,7 @@ function setupStageEditor() {
   StageGizmo.init();
   setupStageRulersAndGuidesInteraction();
 
-  const modeBtns = $$('[data-switch-editor-mode]');
-  if (modeBtns.length) {
-    modeBtns.forEach(btn => {
-      btn.addEventListener('click', () => setEditorMode(btn.getAttribute('data-switch-editor-mode')));
-    });
-  } else if (els.btnEditorMode) {
+  if (els.btnEditorMode) {
     els.btnEditorMode.addEventListener('click', toggleEditorMode);
   }
 
