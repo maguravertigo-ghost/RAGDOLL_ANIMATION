@@ -18,11 +18,10 @@ const PORT_MIN = 8000;
 const PORT_MAX = 8200;
 const HOST     = process.env.HOST || '0.0.0.0';
 
-const ROOT       = __dirname;
-const ANIM_DIR   = path.join(ROOT, 'anim');
-const STAGE_DIR  = path.join(ROOT, 'stage');
-const CHAR3D_DIR = path.join(ROOT, 'char3d');
-const PORT_FILE  = path.join(ROOT, 'port.txt');
+const ROOT      = __dirname;
+const ANIM_DIR  = path.join(ROOT, 'anim');
+const STAGE_DIR = path.join(ROOT, 'stage');
+const PORT_FILE = path.join(ROOT, 'port.txt');
 
 // ------------------------------------------------------------
 // утилиты
@@ -112,8 +111,6 @@ const MIME = {
   '.woff': 'font/woff',
   '.woff2':'font/woff2',
   '.ttf':  'font/ttf',
-  '.glb':  'model/gltf-binary',
-  '.gltf': 'model/gltf+json',
   '.txt':  'text/plain; charset=utf-8'
 };
 
@@ -751,55 +748,6 @@ function handle(req, res) {
     return apiStageUploadAsset(req, res, m[1]);
   }
 
-  // --- API 3D-персонажей (char3d/) ---
-  if (pathname === '/api/chars3d' && method === 'GET') {
-    ensureDir(CHAR3D_DIR);
-    const list = fs.readdirSync(CHAR3D_DIR, { withFileTypes: true })
-      .filter(function (d) { return d.isDirectory(); })
-      .map(function (d) { return d.name; })
-      .sort();
-    return sendJson(res, 200, { characters: list });
-  }
-
-  m = pathname.match(/^\/api\/char3d\/([^\/]+)$/);
-  if (m && method === 'GET') {
-    const safe = safeName(decodeURIComponent(m[1]));
-    if (!safe) return sendJson(res, 400, { error: 'Некорректное имя' });
-    const fp = path.join(CHAR3D_DIR, safe, 'character.json');
-    if (!fs.existsSync(fp)) return sendJson(res, 404, { error: '3D-персонаж не найден' });
-    try {
-      const ch = JSON.parse(fs.readFileSync(fp, 'utf8'));
-      return sendJson(res, 200, { character: ch });
-    } catch (e) {
-      return sendJson(res, 500, { error: e.message });
-    }
-  }
-
-  m = pathname.match(/^\/api\/char3d\/([^\/]+)\/save$/);
-  if (m && method === 'POST') {
-    const safe = safeName(decodeURIComponent(m[1]));
-    if (!safe) return sendJson(res, 400, { error: 'Некорректное имя' });
-    return readBody(req, function (err, body) {
-      if (err) return sendJson(res, 400, { error: err.message });
-      try {
-        const obj = JSON.parse(body || '{}');
-        obj.name = safe;
-        const dir = path.join(CHAR3D_DIR, safe);
-        ensureDir(dir);
-        fs.writeFileSync(path.join(dir, 'character.json'), JSON.stringify(obj, null, 2), 'utf8');
-        // Обновляем char3d/index.json для статического хостинга (GitHub Pages)
-        const list = fs.readdirSync(CHAR3D_DIR, { withFileTypes: true })
-          .filter(function (d) { return d.isDirectory(); })
-          .map(function (d) { return d.name; })
-          .sort();
-        fs.writeFileSync(path.join(CHAR3D_DIR, 'index.json'), JSON.stringify({ characters: list }, null, 2), 'utf8');
-        sendJson(res, 200, { ok: true, name: safe });
-      } catch (e) {
-        sendJson(res, 400, { error: 'Невалидный JSON: ' + e.message });
-      }
-    });
-  }
-
   if (pathname.indexOf('/api/') === 0) {
     return sendJson(res, 404, { error: 'API not found: ' + pathname });
   }
@@ -831,7 +779,6 @@ function handle(req, res) {
 async function main() {
   ensureDir(ANIM_DIR);
   ensureDir(STAGE_DIR);
-  ensureDir(CHAR3D_DIR);
 
   const PORT = await findFreePort();
 
